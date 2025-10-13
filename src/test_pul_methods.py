@@ -1,35 +1,37 @@
 import argparse
-import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import MinMaxScaler
 import time
-import PUBiasCalibration.helper_files.km as km
-import pandas as pd
-from PUBiasCalibration.helper_files.pu_metrics import estimate_p_and_debias
 
-import PUBiasCalibration.Models.PUSB as pusb
-from PUBiasCalibration.Models.PUSB import PUSB
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, precision_score, recall_score, roc_curve, \
+    auc, precision_recall_curve
+from sklearn.preprocessing import MinMaxScaler
+
 import PUBiasCalibration.Models.LBE as lbe
-from PUBiasCalibration.Models.LBE import LBE
 import PUBiasCalibration.Models.PGlin as pgl
-from PUBiasCalibration.Models.PGlin import PUGerych
-from PUBiasCalibration.helper_files.utils import make_binary_class, sigmoid
-import PUBiasCalibration.Models.basic as basic
-from PUBiasCalibration.Models.basic import PUbasic
+import PUBiasCalibration.Models.PUSB as pusb
 import PUBiasCalibration.Models.SAREM as sarem
-from PUBiasCalibration.Models.SAREM import SAREM
+import PUBiasCalibration.Models.basic as basic
 import PUBiasCalibration.Models.threshold as threshold
+import PUBiasCalibration.helper_files.km as km
+from PUBiasCalibration.Models.LBE import LBE
+from PUBiasCalibration.Models.PGlin import PUGerych
+from PUBiasCalibration.Models.SAREM import SAREM
+from PUBiasCalibration.Models.basic import PUbasic
 from PUBiasCalibration.Models.threshold import PUthreshold
-from PUBiasCalibration.Models.PUe import PUe
-from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, precision_score, recall_score, roc_curve, auc, precision_recall_curve
+from PUBiasCalibration.helper_files.pu_metrics import estimate_p_and_debias
 
 
 def prepare_data(name, seed, p, test_size=0.2):
     np.random.seed(seed)
 
-    members = np.load(f"../data/{name}_llm_mia_cfg_5k_real_imagenet_train.npz", allow_pickle=True)
+    # Determine if we should use "cfg" or "loss" based on the model prefix
+    file_type = "loss" if name.startswith("mar_") else "cfg"
+
+    members = np.load(f"../data/{name}_llm_mia_{file_type}_5k_real_imagenet_train.npz", allow_pickle=True)
     X_mem = members["data"]
-    nonmembers = np.load(f"../data/{name}_llm_mia_cfg_5k_real_imagenet_val.npz", allow_pickle=True)
+    nonmembers = np.load(f"../data/{name}_llm_mia_{file_type}_5k_real_imagenet_val.npz", allow_pickle=True)
     X_nonmem = nonmembers["data"]
 
     X_mem = X_mem[np.random.permutation(len(X_mem))]
@@ -38,11 +40,11 @@ def prepare_data(name, seed, p, test_size=0.2):
     # -----------------------------
     # Train set construction
     # -----------------------------
-    # 2000 nonmembers + 1000 unlabeled (p% members)
+    # 2000 nonmembers + 1000 unlabeled
     X_train_nonmem = X_nonmem[:2000]
 
-    n_unl_mem = int(1000 * p)  # members in unlabeled
-    n_unl_nonmem = 1000 - n_unl_mem
+    n_unl_mem = int(1000)
+    n_unl_nonmem = 2000 - n_unl_mem
 
     X_train_unl = np.concatenate([
         X_mem[:n_unl_mem],
@@ -68,9 +70,8 @@ def prepare_data(name, seed, p, test_size=0.2):
     train_len = len(X_train)
     test_len = int(test_size * train_len)
 
-    # Keep same ratio: 2:1 (nonmembers : unlabeled)
-    # n_test_nonmem = int(test_len * (2 / 3))
-    n_test_unl = test_len  # - n_test_nonmem
+
+    n_test_unl = test_len
     n_pos_test = int(n_test_unl * p)
     n_unl_test_nonmem = n_test_unl - n_pos_test
 
@@ -221,9 +222,15 @@ def experiment_lr(name, nsym, p):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-data', type=str, default="var_24", required=False)
-    parser.add_argument('-nsym', type=int, required=True)
-    parser.add_argument('-prob', type=float, required=True)
+    parser.add_argument('-data', type=str, default="var_24", required=False,
+                        help="Model to use. Available options: "
+                             "var_16, var_20, var_24 (default), var_30, "
+                             "rar_b, rar_l, rar_xl, rar_xxl, "
+                             "mar_b, mar_l, mar_h")
+    parser.add_argument('-nsym', type=int, required=True,
+                        help="Number of iterations/runs")
+    parser.add_argument('-prob', type=float, required=True,
+                        help="Probability value (between 0 and 1)")
     args = parser.parse_args()
 
     experiment_lr(args.data, args.nsym, args.prob)
