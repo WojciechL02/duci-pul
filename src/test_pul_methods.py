@@ -5,6 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 import time
 import PUBiasCalibration.helper_files.km as km
 import pandas as pd
+from PUBiasCalibration.helper_files.pu_metrics import estimate_p_and_debias
 
 import PUBiasCalibration.Models.PUSB as pusb
 from PUBiasCalibration.Models.PUSB import PUSB
@@ -104,7 +105,7 @@ def prepare_data(name, seed, p, test_size=0.2):
 def experiment_lr(name, nsym, p):
     records = []
     methods = ['threshold', 'sar-em', 'pusb', 'pglin', 'lbe', 'oracle', 'dummy', 'threshold_balanced']
-    metrics = ["acc", "bacc", "rec", "prec", "f1", "tpr", "tnr", "roc_auc", "pr_auc" , "time"]
+    metrics = ["acc", "p_hat", "pi_hat", "TPR", "FPR", "J"]#["acc", "bacc", "rec", "prec", "f1", "tpr", "tnr", "roc_auc", "pr_auc" , "time"]
     for method in methods:
         print('\n Method:', method)
         for sym in np.arange(0, nsym, 1):
@@ -141,33 +142,64 @@ def experiment_lr(name, nsym, p):
 
             prob_y_test = model.predict_proba(X_test)[:, 1]
 
+            #flip_labels
+            prob_y_test = 1 - prob_y_test
+            y_test = 1 - y_test
+
             acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            rec = recall_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            prec = precision_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            f1 = f1_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            tpr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 1] == 1) / np.count_nonzero(y_test == 1)
-            tnr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 0] == 0) / np.count_nonzero(y_test == 0)
-            fpr_thr, tpr_thr, thr = roc_curve(y_test, prob_y_test, pos_label=1)
-            roc_auc = auc(fpr_thr, tpr_thr)
-            prec_thr, recall_thr, thr = precision_recall_curve(y_test, prob_y_test)
-            pr_auc = auc(recall_thr, prec_thr)
+            # rec = recall_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            # prec = precision_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            # f1 = f1_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            # tpr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 1] == 1) / np.count_nonzero(y_test == 1)
+            # tnr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 0] == 0) / np.count_nonzero(y_test == 0)
+            # fpr_thr, tpr_thr, thr = roc_curve(y_test, prob_y_test, pos_label=1)
+            # roc_auc = auc(fpr_thr, tpr_thr)
+            # prec_thr, recall_thr, thr = precision_recall_curve(y_test, prob_y_test)
+            # pr_auc = auc(recall_thr, prec_thr)
             bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
 
             results = {
                 "acc": acc,
                 "bacc": bacc,
-                "rec": rec,
-                "prec": prec,
-                "f1": f1,
-                "tpr": tpr,
-                "tnr": tnr,
-                "roc_auc": roc_auc,
-                "pr_auc": pr_auc,
+            #     "rec": rec,
+            #     "prec": prec,
+            #     "f1": f1,
+            #     "tpr": tpr,
+            #     "tnr": tnr,
+            #     "roc_auc": roc_auc,
+            #     "pr_auc": pr_auc,
                 "time": run_time,
             }
-            results.update({"method": method, "run": sym+1})
+            #estimate p_hat here
+            # Get negative samples (labeled negatives from X_train)
+            X_train_neg = X_train[s_train == 1]
+
+            # Get scores for negative samples
+            neg_scores = model.predict_proba(X_train_neg)[:, 1]
+
+            # Flip scores to match the flipped labels
+            neg_scores = 1 - neg_scores
+
+            # Estimate p_hat and perform debiasing
+            p_hat_results = estimate_p_and_debias(prob_y_test, neg_scores)
+
+            # Add method, run, and p_hat results to the results dictionary
+            results.update({
+                "method": method, 
+                "run": sym+1,
+                "p_hat": p_hat_results["p_hat"],
+                "pi_hat": p_hat_results["pi_hat"],
+                "ci_low": p_hat_results["ci_low"],
+                "ci_high": p_hat_results["ci_high"],
+                "threshold": p_hat_results["threshold"],
+                "TPR": p_hat_results["TPR"],
+                "FPR": p_hat_results["FPR"],
+                "J": p_hat_results["J"]
+            })
+            print(results)
             records.append(results)
 
+            #
     df = pd.DataFrame(records)
 
     agg = df.groupby("method")[metrics].agg(["min", "mean", "std", "max"])
@@ -183,11 +215,6 @@ def experiment_lr(name, nsym, p):
         rows.append(row)
 
     formatted = pd.DataFrame(rows)
-
-    # Step 4: Round numeric min/max and save to TXT
-    # for col in formatted.columns:
-    #     if col.endswith("_min") or col.endswith("_max"):
-    #         formatted[col] = formatted[col].apply(lambda x: f"{x:.3f}")
 
     formatted.to_csv(f"../results/results_agg_{name}_p={p}.csv", index=False, sep="\t")
 
