@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, precision_score, recall_score, roc_curve, \
     auc, precision_recall_curve
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MinMaxScaler
 
 import PUBiasCalibration.Models.LBE as lbe

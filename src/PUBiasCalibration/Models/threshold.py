@@ -1,13 +1,15 @@
+import numpy as np
 import torch
 import tqdm
-import numpy as np
-
-from torch import nn
-from ..helper_files.classifiers import LR, MLPReLU, FullCNN, Resnet
-from ..threshold_optimizer import ThresholdOptimizer
-from ..helper_files.utils import EarlyStopping, sigmoid
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsRestClassifier
+from torch import nn
+
+from ..helper_files.classifiers import LR, MLPReLU, FullCNN, Resnet
+from ..helper_files.utils import EarlyStopping, sigmoid
+from ..threshold_optimizer import ThresholdOptimizer
+
 
 def seed(seed):
     torch.manual_seed(seed)
@@ -25,15 +27,16 @@ class PUthreshold(BaseEstimator):
         """
         Initializes the threshold model.
         """
-        self.clf = LogisticRegression(max_iter=1000)
+        base_estimator = LogisticRegression(max_iter=1000)
+        self.clf = OneVsRestClassifier(base_estimator)
         self.topt = None
-        
-    
+
+
 
     def fit(self, X, s):
         """
         Fits the threshold model to the data.
-        
+
         Parameters
         ----------
         X : numpy.ndarray
@@ -41,13 +44,13 @@ class PUthreshold(BaseEstimator):
         s : numpy.ndarray
             The observed labels of the data.
         """
-        
+
         self.clf.fit(X,s)
         sx = self.clf.predict_proba(X)[:,1]
-        
+
         sx[np.where(sx==1)] = 0.999
         sx[np.where(sx==0)] = 0.001
-        
+
         lin_pred = np.log(sx/(1-sx))
 
         w0 = np.where(s==0)[0]
@@ -55,25 +58,25 @@ class PUthreshold(BaseEstimator):
 
         to = ThresholdOptimizer(k=3, n=100)
         t_opt = to.find_threshold(lin_pred0)
-        
+
         self.topt = t_opt
         return self
 
     def predict(self, X):
         """
         Predicts the labels of the data.
-       
+
         Parameters
         ----------
         X : numpy.ndarray
             The data to predict the labels of.
         """
         return np.where(self.predict_proba(X)>0.5,1,0) 
-        
+
     def predict_proba(self, Xtest):
         """
         Predicts the probabilities of the data.
-        
+
         Parameters
         ----------
         Xtest : numpy.ndarray
@@ -93,7 +96,7 @@ class PUthresholddeep(nn.Module):
     def __init__(self, clf, dims=None, device=0) -> None:
         """
         Initializes the threshold model.
-        
+
         Parameters
         ----------
         clf : str
@@ -120,11 +123,11 @@ class PUthresholddeep(nn.Module):
             self.ntc = Resnet().to(self.device)
 
         self.threshold = None
-        
+
     def predict_proba(self, x):
         """
         Predicts the probabilities of the data.
-        
+
         Parameters
         ----------
         x : torch.Tensor
@@ -139,7 +142,7 @@ class PUthresholddeep(nn.Module):
     def calculate_optimal_threshold(self, trainloader):
         """
         Calculates the optimal threshold for the data.
-        
+
         Parameters
         ----------
         trainloader : torch.utils.data.DataLoader
@@ -152,7 +155,7 @@ class PUthresholddeep(nn.Module):
         with torch.no_grad():
             for data in trainloader:
                 inputs, labels = data[0].to(self.device), data[1].to(self.device)
-    
+
                 inputs_unlabeled = inputs[labels == 0]
                 unlabeled_length = len(inputs_unlabeled)
                 z_ = self.ntc(inputs_unlabeled, probabilistic=False).squeeze().detach()
@@ -169,7 +172,7 @@ class PUthresholddeep(nn.Module):
     def fit(self, trainloader, valloader, epochs, lr=1e-3):
         """
         Fits the threshold model to the data.
-        
+
         Parameters
         ----------
         trainloader : torch.utils.data.DataLoader
@@ -183,7 +186,7 @@ class PUthresholddeep(nn.Module):
         """
         optimizer = torch.optim.Adam(self.ntc.parameters(), lr=lr)
         criterion = nn.BCEWithLogitsLoss()
-        
+
         es = EarlyStopping()
 
         done = False
@@ -214,12 +217,11 @@ class PUthresholddeep(nn.Module):
                         done = True
 
                     pbar.set_description(f"Epoch: {epoch}, tloss: {loss}, vloss: {v_loss:>7f}, EStop:[{es.status}]")
-                
+
                 else:
                     pbar.set_description(f"Epoch: {epoch}, tloss: {loss:}")
-            
+
             if done == True:
                 break
-        
+
         self.calculate_optimal_threshold(trainloader)
-        

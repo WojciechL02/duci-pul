@@ -1,6 +1,7 @@
-import numpy as np
-import sklearn.linear_model
 import time
+
+import numpy as np
+
 from .PUmodels import *
 
 EPS = 1e-4
@@ -242,4 +243,3 @@ class LimitedFeaturesModel:
         else:
             self.model.fit(x[:,self.features], y, sample_weight)
         return self
-
