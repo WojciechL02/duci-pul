@@ -53,11 +53,11 @@ def convert_tpr_nu_to_true(TPR_NU, FPR, pi_hat):
 def estimate_class_prior(scores, neg_scores, simple_mean=True):
     """
     Estimate the class prior (pi) using both KM method and simple mean.
-    
+
     Args:
         scores: Scores of all samples
         neg_scores: Scores of known negative samples
-        
+
     Returns:
         pi_hat: Estimated class prior using KM method
     """
@@ -71,24 +71,24 @@ def estimate_class_prior(scores, neg_scores, simple_mean=True):
     # Sort scores in ascending order
     sorted_scores = np.sort(scores)
     sorted_neg_scores = np.sort(neg_scores)
-    
+
     # Calculate empirical CDFs
     cdf_all = np.arange(1, len(sorted_scores) + 1) / len(sorted_scores)
     cdf_neg = np.arange(1, len(sorted_neg_scores) + 1) / len(sorted_neg_scores)
-    
+
     # Interpolate negative CDF to match all scores
     from scipy.interpolate import interp1d
     f_neg = interp1d(sorted_neg_scores, cdf_neg, bounds_error=False, fill_value=(0, 1))
     neg_cdf_interp = f_neg(sorted_scores)
-    
+
     # Calculate pi_hat as the maximum difference between CDFs
     valid_indices = (neg_cdf_interp > 0) & (cdf_all > 0)
     if not np.any(valid_indices):
         return 0.0
-    
+
     ratios = cdf_all[valid_indices] / neg_cdf_interp[valid_indices]
     pi_hat = 1.0 - np.min(ratios)
-    
+
     print(f"KM method estimate of pi: {pi_hat:.4f}")
     return float(np.clip(pi_hat, 0.0, 1.0))
 
@@ -159,11 +159,36 @@ def estimate_p_and_debias(target_scores, neg_scores, alpha=0.05):
     print(f"Estimated pi: {pi_hat:.4f}")
     # Choose optimal threshold
     best = choose_threshold_nu(target_scores, neg_scores, pi_hat)
-    
+
     # Perform debiasing
     result = debias_target(target_scores, best["thr"], best["TPR"], best["FPR"], alpha)
-    
+
     # Add pi_hat to the result
     result["pi_hat"] = float(pi_hat)
-    
+
+    # Calculate lowerbound (p_hat with TPR=1.0)
+    # Find threshold that minimizes FPR (since TPR is fixed at 1.0)
+    thresholds = np.unique(target_scores)
+    if len(thresholds) > 500:
+        thresholds = np.quantile(target_scores, np.linspace(0, 1, 501))
+
+    best_thr = None
+    best_fpr = float('inf')
+
+    for thr in thresholds:
+        fpr = fpr_nu_at_threshold(neg_scores, thr)
+        if fpr < best_fpr:
+            best_fpr = fpr
+            best_thr = thr
+
+    # Set TPR to 1.0 for lowerbound calculation
+    tpr = 1.0
+
+    # Perform debiasing with TPR=1.0
+    lowerbound_result = debias_target(target_scores, best_thr, tpr, best_fpr, alpha)
+
+    # Add lowerbound p_hat to the main result
+    result["lowerbound"] = float(lowerbound_result["p_hat"])
+
     return result
+

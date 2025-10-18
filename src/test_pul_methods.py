@@ -1,4 +1,5 @@
 import argparse
+import os
 import time
 
 import numpy as np
@@ -24,7 +25,7 @@ from PUBiasCalibration.Models.threshold import PUthreshold
 from PUBiasCalibration.helper_files.pu_metrics import estimate_p_and_debias
 
 
-def prepare_data(name, seed, p, test_size=0.2):
+def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     np.random.seed(seed)
 
     # Determine if we should use "cfg" or "loss" based on the model prefix
@@ -41,10 +42,11 @@ def prepare_data(name, seed, p, test_size=0.2):
     # -----------------------------
     # Train set construction
     # -----------------------------
-    # 2000 nonmembers + 1000 unlabeled
+    # 2000 nonmembers + 2000 unlabeled (with varying member ratio)
     X_train_nonmem = X_nonmem[:2000]
 
-    n_unl_mem = int(1000)
+    # Calculate number of unlabeled members based on ratio (2000 = 100%)
+    n_unl_mem = int(2000 * unl_mem_ratio)
     n_unl_nonmem = 2000 - n_unl_mem
 
     X_train_unl = np.concatenate([
@@ -104,15 +106,15 @@ def prepare_data(name, seed, p, test_size=0.2):
     return X_train, X_test, y_train, y_test, s_train
 
 
-def experiment_lr(name, nsym, p):
+def experiment_lr(name, nsym, p, unl_mem_ratio=0.5, results_dir="../results"):
     records = []
     methods = ['threshold', 'sar-em', 'pusb', 'pglin', 'lbe', 'oracle', 'dummy', 'threshold_balanced']
-    metrics = ["acc", "p_hat", "pi_hat", "TPR", "FPR", "J"]#["acc", "bacc", "rec", "prec", "f1", "tpr", "tnr", "roc_auc", "pr_auc" , "time"]
+    metrics = ["acc", "p_hat", "pi_hat", "TPR", "FPR", "J", "lowerbound"]#["acc", "bacc", "rec", "prec", "f1", "tpr", "tnr", "roc_auc", "pr_auc" , "time"]
     for method in methods:
         print('\n Method:', method)
         for sym in np.arange(0, nsym, 1):
 
-            X_train, X_test, y_train, y_test, s_train = prepare_data(name=name, seed=sym, p=p)
+            X_train, X_test, y_train, y_test, s_train = prepare_data(name=name, seed=sym, p=p, unl_mem_ratio=unl_mem_ratio)
             np.random.seed(sym)
             km.seed(sym)
             pusb.seed(sym)
@@ -182,7 +184,7 @@ def experiment_lr(name, nsym, p):
             # Flip scores to match the flipped labels
             neg_scores = 1 - neg_scores
 
-            # Estimate p_hat and perform debiasing
+            # Estimate p_hat and perform debiasing (includes lowerbound calculation)
             p_hat_results = estimate_p_and_debias(prob_y_test, neg_scores)
 
             # Add method, run, and p_hat results to the results dictionary
@@ -196,7 +198,8 @@ def experiment_lr(name, nsym, p):
                 "threshold": p_hat_results["threshold"],
                 "TPR": p_hat_results["TPR"],
                 "FPR": p_hat_results["FPR"],
-                "J": p_hat_results["J"]
+                "J": p_hat_results["J"],
+                "lowerbound": p_hat_results["lowerbound"]
             })
             print(results)
             records.append(results)
@@ -218,7 +221,11 @@ def experiment_lr(name, nsym, p):
 
     formatted = pd.DataFrame(rows)
 
-    formatted.to_csv(f"../results/results_agg_{name}_p={p}.csv", index=False, sep="\t")
+    # Create results directory if it doesn't exist
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+
+    formatted.to_csv(f"{results_dir}/results_agg_{name}_p={p}.csv", index=False, sep="\t")
 
 
 def main():
@@ -232,9 +239,13 @@ def main():
                         help="Number of iterations/runs")
     parser.add_argument('-prob', type=float, required=True,
                         help="Probability value (between 0 and 1)")
+    parser.add_argument('-unl_mem_ratio', type=float, default=0.5, required=False,
+                        help="Unlabeled members ratio (between 0 and 1, where 1.0 = 2000 members, default: 0.5)")
+    parser.add_argument('-results', type=str, default="../results", required=False,
+                        help="Directory to save results (default: ../results)")
     args = parser.parse_args()
 
-    experiment_lr(args.data, args.nsym, args.prob)
+    experiment_lr(args.data, args.nsym, args.prob, args.unl_mem_ratio, args.results)
 
 
 if __name__ == "__main__":
