@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC
 
 
@@ -11,7 +12,7 @@ class BasePU:
         if sample_weight is not None:
             weights_pos = sample_weight*weights_pos
             weights_neg = sample_weight*weights_neg
-            
+
         Xp = np.concatenate([x,x])
         Yp = np.concatenate([np.ones_like(s), np.zeros_like(s)])
         Wp = np.concatenate([weights_pos, weights_neg])

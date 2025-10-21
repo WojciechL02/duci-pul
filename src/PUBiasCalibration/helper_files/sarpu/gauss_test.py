@@ -38,11 +38,11 @@ def read_names_file(filename):
                 break
 
             match = re.match(r'([^:]+):\s+[a-zA-Z]+\.', s)
-            
+
             if match is not None:
                 column_name = match.groups()[0]
                 columns.append(column_name)
-            
+
         return columns
 
 
@@ -90,10 +90,11 @@ plt.scatter(X[:, 0], X[:, 1], c=y, s=20, edgecolor="k")
 
 # %%
 from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsRestClassifier
 import numpy as np
 
-# clf = LogisticRegression(tol=1e-3, max_iter=3)
-clf = LogisticRegression()
+# clf = OneVsRestClassifier(LogisticRegression(tol=1e-3, max_iter=3))
+clf = OneVsRestClassifier(LogisticRegression())
 clf.fit(X, y)
 
 y_pred = clf.predict(X)
@@ -135,7 +136,7 @@ plt.show()
 
 # for param in nn_clf.named_parameters():
 #     print(param)
-    
+
 
 # # %%
 # x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1

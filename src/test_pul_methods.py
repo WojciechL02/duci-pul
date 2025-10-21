@@ -1,34 +1,39 @@
 import argparse
-import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import MinMaxScaler
+import os
 import time
-import PUBiasCalibration.helper_files.km as km
+
+import numpy as np
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, precision_score, recall_score, roc_curve, \
+    auc, precision_recall_curve
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.preprocessing import MinMaxScaler
 
-import PUBiasCalibration.Models.PUSB as pusb
-from PUBiasCalibration.Models.PUSB import PUSB
 import PUBiasCalibration.Models.LBE as lbe
-from PUBiasCalibration.Models.LBE import LBE
 import PUBiasCalibration.Models.PGlin as pgl
-from PUBiasCalibration.Models.PGlin import PUGerych
-from PUBiasCalibration.helper_files.utils import make_binary_class, sigmoid
-import PUBiasCalibration.Models.basic as basic
-from PUBiasCalibration.Models.basic import PUbasic
+import PUBiasCalibration.Models.PUSB as pusb
 import PUBiasCalibration.Models.SAREM as sarem
-from PUBiasCalibration.Models.SAREM import SAREM
+import PUBiasCalibration.Models.basic as basic
 import PUBiasCalibration.Models.threshold as threshold
+import PUBiasCalibration.helper_files.km as km
+from PUBiasCalibration.Models.LBE import LBE
+from PUBiasCalibration.Models.PGlin import PUGerych
+from PUBiasCalibration.Models.SAREM import SAREM
+from PUBiasCalibration.Models.basic import PUbasic
 from PUBiasCalibration.Models.threshold import PUthreshold
-from PUBiasCalibration.Models.PUe import PUe
-from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, precision_score, recall_score, roc_curve, auc, precision_recall_curve
+from PUBiasCalibration.helper_files.pu_metrics import estimate_p_and_debias
 
 
-def prepare_data(name, seed, p, test_size=0.2):
+def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     np.random.seed(seed)
 
-    members = np.load(f"../data/{name}_llm_mia_cfg_5k_real_imagenet_train.npz", allow_pickle=True)
+    # Determine if we should use "cfg" or "loss" based on the model prefix
+    file_type = "loss" if name.startswith("mar_") else "cfg"
+
+    members = np.load(f"../data/{name}_llm_mia_{file_type}_5k_real_imagenet_train.npz", allow_pickle=True)
     X_mem = members["data"]
-    nonmembers = np.load(f"../data/{name}_llm_mia_cfg_5k_real_imagenet_val.npz", allow_pickle=True)
+    nonmembers = np.load(f"../data/{name}_llm_mia_{file_type}_5k_real_imagenet_val.npz", allow_pickle=True)
     X_nonmem = nonmembers["data"]
 
     X_mem = X_mem[np.random.permutation(len(X_mem))]
@@ -37,11 +42,12 @@ def prepare_data(name, seed, p, test_size=0.2):
     # -----------------------------
     # Train set construction
     # -----------------------------
-    # 2000 nonmembers + 1000 unlabeled (p% members)
+    # 2000 nonmembers + 2000 unlabeled (with varying member ratio)
     X_train_nonmem = X_nonmem[:2000]
 
-    n_unl_mem = int(1000 * p)  # members in unlabeled
-    n_unl_nonmem = 1000 - n_unl_mem
+    # Calculate number of unlabeled members based on ratio (2000 = 100%)
+    n_unl_mem = int(2000 * unl_mem_ratio)
+    n_unl_nonmem = 2000 - n_unl_mem
 
     X_train_unl = np.concatenate([
         X_mem[:n_unl_mem],
@@ -67,9 +73,8 @@ def prepare_data(name, seed, p, test_size=0.2):
     train_len = len(X_train)
     test_len = int(test_size * train_len)
 
-    # Keep same ratio: 2:1 (nonmembers : unlabeled)
-    # n_test_nonmem = int(test_len * (2 / 3))
-    n_test_unl = test_len  # - n_test_nonmem
+
+    n_test_unl = test_len
     n_pos_test = int(n_test_unl * p)
     n_unl_test_nonmem = n_test_unl - n_pos_test
 
@@ -101,15 +106,15 @@ def prepare_data(name, seed, p, test_size=0.2):
     return X_train, X_test, y_train, y_test, s_train
 
 
-def experiment_lr(name, nsym, p):
+def experiment_lr(name, nsym, p, unl_mem_ratio=0.5, results_dir="../results"):
     records = []
     methods = ['threshold', 'sar-em', 'pusb', 'pglin', 'lbe', 'oracle', 'dummy', 'threshold_balanced']
-    metrics = ["acc", "bacc", "rec", "prec", "f1", "tpr", "tnr", "roc_auc", "pr_auc" , "time"]
+    metrics = ["acc", "p_hat", "pi_hat", "TPR", "FPR", "J", "lowerbound"]#["acc", "bacc", "rec", "prec", "f1", "tpr", "tnr", "roc_auc", "pr_auc" , "time"]
     for method in methods:
         print('\n Method:', method)
         for sym in np.arange(0, nsym, 1):
 
-            X_train, X_test, y_train, y_test, s_train = prepare_data(name=name, seed=sym, p=p)
+            X_train, X_test, y_train, y_test, s_train = prepare_data(name=name, seed=sym, p=p, unl_mem_ratio=unl_mem_ratio)
             np.random.seed(sym)
             km.seed(sym)
             pusb.seed(sym)
@@ -141,33 +146,65 @@ def experiment_lr(name, nsym, p):
 
             prob_y_test = model.predict_proba(X_test)[:, 1]
 
+            #flip_labels
+            prob_y_test = 1 - prob_y_test
+            y_test = 1 - y_test
+
             acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            rec = recall_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            prec = precision_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            f1 = f1_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            tpr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 1] == 1) / np.count_nonzero(y_test == 1)
-            tnr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 0] == 0) / np.count_nonzero(y_test == 0)
-            fpr_thr, tpr_thr, thr = roc_curve(y_test, prob_y_test, pos_label=1)
-            roc_auc = auc(fpr_thr, tpr_thr)
-            prec_thr, recall_thr, thr = precision_recall_curve(y_test, prob_y_test)
-            pr_auc = auc(recall_thr, prec_thr)
+            # rec = recall_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            # prec = precision_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            # f1 = f1_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            # tpr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 1] == 1) / np.count_nonzero(y_test == 1)
+            # tnr = np.count_nonzero(np.where(prob_y_test > 0.5, 1, 0)[y_test == 0] == 0) / np.count_nonzero(y_test == 0)
+            # fpr_thr, tpr_thr, thr = roc_curve(y_test, prob_y_test, pos_label=1)
+            # roc_auc = auc(fpr_thr, tpr_thr)
+            # prec_thr, recall_thr, thr = precision_recall_curve(y_test, prob_y_test)
+            # pr_auc = auc(recall_thr, prec_thr)
             bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
 
             results = {
                 "acc": acc,
                 "bacc": bacc,
-                "rec": rec,
-                "prec": prec,
-                "f1": f1,
-                "tpr": tpr,
-                "tnr": tnr,
-                "roc_auc": roc_auc,
-                "pr_auc": pr_auc,
+            #     "rec": rec,
+            #     "prec": prec,
+            #     "f1": f1,
+            #     "tpr": tpr,
+            #     "tnr": tnr,
+            #     "roc_auc": roc_auc,
+            #     "pr_auc": pr_auc,
                 "time": run_time,
             }
-            results.update({"method": method, "run": sym+1})
+            #estimate p_hat here
+            # Get negative samples (labeled negatives from X_train)
+            X_train_neg = X_train[s_train == 1]
+
+            # Get scores for negative samples
+            neg_scores = model.predict_proba(X_train_neg)[:, 1]
+
+            # Flip scores to match the flipped labels
+            neg_scores = 1 - neg_scores
+
+            # Estimate p_hat and perform debiasing (includes lowerbound calculation)
+            p_hat_results = estimate_p_and_debias(prob_y_test, neg_scores)
+
+            # Add method, run, and p_hat results to the results dictionary
+            results.update({
+                "method": method, 
+                "run": sym+1,
+                "p_hat": p_hat_results["p_hat"],
+                "pi_hat": p_hat_results["pi_hat"],
+                "ci_low": p_hat_results["ci_low"],
+                "ci_high": p_hat_results["ci_high"],
+                "threshold": p_hat_results["threshold"],
+                "TPR": p_hat_results["TPR"],
+                "FPR": p_hat_results["FPR"],
+                "J": p_hat_results["J"],
+                "lowerbound": p_hat_results["lowerbound"]
+            })
+            print(results)
             records.append(results)
 
+            #
     df = pd.DataFrame(records)
 
     agg = df.groupby("method")[metrics].agg(["min", "mean", "std", "max"])
@@ -184,22 +221,31 @@ def experiment_lr(name, nsym, p):
 
     formatted = pd.DataFrame(rows)
 
-    # Step 4: Round numeric min/max and save to TXT
-    # for col in formatted.columns:
-    #     if col.endswith("_min") or col.endswith("_max"):
-    #         formatted[col] = formatted[col].apply(lambda x: f"{x:.3f}")
+    # Create results directory if it doesn't exist
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
 
-    formatted.to_csv(f"../results/results_agg_{name}_p={p}.csv", index=False, sep="\t")
+    formatted.to_csv(f"{results_dir}/results_agg_{name}_p={p}.csv", index=False, sep="\t")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-data', type=str, default="var_24", required=False)
-    parser.add_argument('-nsym', type=int, required=True)
-    parser.add_argument('-prob', type=float, required=True)
+    parser.add_argument('-data', type=str, default="var_24", required=False,
+                        help="Model to use. Available options: "
+                             "var_16, var_20, var_24 (default), var_30, "
+                             "rar_b, rar_l, rar_xl, rar_xxl, "
+                             "mar_b, mar_l, mar_h")
+    parser.add_argument('-nsym', type=int, required=True,
+                        help="Number of iterations/runs")
+    parser.add_argument('-prob', type=float, required=True,
+                        help="Probability value (between 0 and 1)")
+    parser.add_argument('-unl_mem_ratio', type=float, default=0.5, required=False,
+                        help="Unlabeled members ratio (between 0 and 1, where 1.0 = 2000 members, default: 0.5)")
+    parser.add_argument('-results', type=str, default="../results", required=False,
+                        help="Directory to save results (default: ../results)")
     args = parser.parse_args()
 
-    experiment_lr(args.data, args.nsym, args.prob)
+    experiment_lr(args.data, args.nsym, args.prob, args.unl_mem_ratio, args.results)
 
 
 if __name__ == "__main__":

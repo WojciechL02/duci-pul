@@ -140,8 +140,8 @@ dependencies:
       - scipy==1.16.2
       - sympy==1.14.0
       - threadpoolctl==3.6.0
-      - torch==2.8.0+cpu
-      - torchvision==0.23.0+cpu
+      - torch==2.8.0
+      - torchvision==0.23.0
       - tqdm==4.67.1
       - tzdata==2025.2
 prefix: /home/wojciech/miniconda3/envs/duci-pul
