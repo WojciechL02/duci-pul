@@ -1,17 +1,16 @@
 import argparse
 import os
 import time
-import re
 import warnings
 
 import numpy as np
 import pandas as pd
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, precision_score, recall_score, roc_curve, \
     auc, precision_recall_curve, roc_auc_score
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.exceptions import ConvergenceWarning
 
 import PUBiasCalibration.Models.LBE as lbe
 import PUBiasCalibration.Models.PGlin as pgl
@@ -193,9 +192,6 @@ def experiment_lr(name, nsym, p, unl_mem_ratio=0.5, results_dir="../results"):
 
             prob_y_test = model.predict_proba(X_test)[:, 1]
 
-            #flip_labels
-            prob_y_test = 1 - prob_y_test
-            y_test = 1 - y_test
 
             # =====================================================================
             # Distribution Shift Correction with true control features
@@ -239,6 +235,9 @@ def experiment_lr(name, nsym, p, unl_mem_ratio=0.5, results_dir="../results"):
             # Replace original probabilities with residualized ones
             prob_y_test = p_resid_test
             # =====================================================================
+            #flip_labels
+            prob_y_test = 1 - prob_y_test
+            y_test = 1 - y_test
 
             acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
             # rec = recall_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
