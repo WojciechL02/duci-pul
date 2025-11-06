@@ -1,0 +1,143 @@
+import numpy as np
+import torch
+from PUBiasCalibration.helper_files.lbe.LBE import lbe_train, lbe_predict_proba
+from sklearn.base import BaseEstimator
+
+
+def seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+
+def _lbe_nu_estimate_p_robust(
+    scores_U: np.ndarray,
+    scores_N: np.ndarray,
+    *,
+    bins: int = 80,
+    tail_trim: float = 0.001,
+    min_bin_count_N: int = 5,
+    min_bin_count_U: int = 1,
+    relax: float | str = "auto",
+    auto_relax_scale: float = 2.0
+) -> float:
+    U = np.asarray(scores_U, float).ravel()
+    N = np.asarray(scores_N, float).ravel()
+    nU, nN = len(U), len(N)
+    if nU == 0 or nN == 0:
+        raise ValueError("scores_U and scores_N must be non-empty.")
+    both = np.concatenate([U, N])
+    lo = np.quantile(both, tail_trim)
+    hi = np.quantile(both, 1 - tail_trim)
+    Uc = U[(U >= lo) & (U <= hi)]
+    Nc = N[(N >= lo) & (N <= hi)]
+    edges = np.linspace(lo, hi, bins + 1)
+    cU, _ = np.histogram(Uc, bins=edges)
+    cN, _ = np.histogram(Nc, bins=edges)
+    mask = (cN >= min_bin_count_N) & (cU >= min_bin_count_U)
+    if not np.any(mask):
+        mask = (cN >= min_bin_count_N)
+    bw = np.diff(edges)
+    hU = cU / (nU * bw)
+    hN = cN / (nN * bw)
+    if relax == "auto":
+        relax = auto_relax_scale / min(nU, nN)
+    denom = np.maximum(hN[mask], 1e-12)
+    ratios = (hU[mask] + float(relax)) / denom
+    piN_hat = float(np.clip(np.min(ratios), 0.0, 1.0))
+    return float(np.clip(1.0 - piN_hat, 0.0, 1.0))
+
+class LBEWithPrior(BaseEstimator):
+    """
+    NU setting:
+      s==1 -> known negatives (N)
+      s==0 -> unlabeled (U)
+    Trains a scorer with lbe_train, uses predict_proba, and runs robust histogram LBE on that score.
+    """
+    def __init__(self, bins=80, relax="auto", tail_trim=0.001,
+                 min_bin_count_N=5, min_bin_count_U=1, proba_index=1):
+        self.bins = bins
+        self.relax = relax
+        self.tail_trim = tail_trim
+        self.min_bin_count_N = min_bin_count_N
+        self.min_bin_count_U = min_bin_count_U
+        self.proba_index = proba_index
+        self.model = None
+        self.pi = None  # estimated prevalence on the last fit() dataset
+
+    def fit(self, X, s):
+        # Train the scorer once (do NOT train on test when evaluating)
+        self.model = lbe_train(X, s, kind='LR', epochs=250)  # <- your function
+        # Estimate p on this dataset
+        self.pi = self._estimate_p_from_X_and_s(X, s)
+        return self
+
+    def predict_proba(self, X):
+        probs = lbe_predict_proba(self.model, X)  # <- your function
+        probs = np.asarray(probs)
+        if probs.ndim == 1:
+            probs = np.vstack([1 - probs, probs]).T
+        return probs
+
+    def prior_(self):
+        if self.pi is None:
+            raise RuntimeError("Call fit() first.")
+        return self.pi
+
+    def get_prior(self):
+        return self.prior_()
+
+    # ---------- NEW: estimate p on ANY new dataset without retraining ----------
+    def estimate_p_on(self, X_new, s_new):
+        """
+        Reuse the trained model to estimate prevalence p on a new split/dataset.
+        s_new uses the same convention (0=U, 1=N). No retraining happens here.
+        """
+        if self.model is None:
+            raise RuntimeError("Model not trained. Call fit() first.")
+        return self._estimate_p_from_X_and_s(X_new, s_new)
+
+    # ---------- Helper: shared logic ----------
+    def _estimate_p_from_X_and_s(self, X, s):
+        probs = self.predict_proba(X)  # (n,2)
+        scores = probs[:, self.proba_index]  # prob of “U/member-like” class
+        scores_U = scores[s == 0]
+        scores_N = scores[s == 1]
+
+        # Orientation check for probabilities; flip if needed
+        if np.mean(scores_U) < np.mean(scores_N):
+            scores_U = 1.0 - scores_U
+            scores_N = 1.0 - scores_N
+
+        p_hat = _lbe_nu_estimate_p_robust(
+            scores_U, scores_N,
+            bins=self.bins,
+            tail_trim=self.tail_trim,
+            min_bin_count_N=self.min_bin_count_N,
+            min_bin_count_U=self.min_bin_count_U,
+            relax=self.relax
+        )
+        return p_hat
+
+    # ---------- Optional: estimate directly from scores without X ----------
+    def estimate_p_from_scores(self, scores: np.ndarray, s: np.ndarray):
+        """
+        If you already have predict_proba scores for a dataset (prob of U/member-like),
+        pass them here with s (0=U, 1=N) to run LBE directly.
+        """
+        scores = np.asarray(scores).ravel()
+        scores_U = scores[s == 0]
+        scores_N = scores[s == 1]
+        if np.mean(scores_U) < np.mean(scores_N):
+            scores_U = 1.0 - scores_U
+            scores_N = 1.0 - scores_N
+        return _lbe_nu_estimate_p_robust(
+            scores_U, scores_N,
+            bins=self.bins,
+            tail_trim=self.tail_trim,
+            min_bin_count_N=self.min_bin_count_N,
+            min_bin_count_U=self.min_bin_count_U,
+            relax=self.relax
+        )
