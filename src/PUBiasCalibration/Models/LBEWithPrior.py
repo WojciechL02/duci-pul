@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from PUBiasCalibration.helper_files.lbe.LBE import lbe_train, lbe_predict_proba
 from sklearn.base import BaseEstimator
+import matplotlib.pyplot as plt
 
 
 def seed(seed):
@@ -12,6 +13,56 @@ def seed(seed):
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
 
+
+def plot_hist_with_excess(hU, hN, edges, estimated_p):
+    centers = 0.5 * (edges[1:] + edges[:-1])
+    bw = np.diff(edges)
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    # Plot the two density curves
+    ax.step(
+        edges[:-1],
+        hU,
+        where="post",
+        color="orange",
+        linewidth=2,
+        label="Unlabeled mixture",
+    )
+    ax.step(
+        edges[:-1],
+        hN,
+        where="post",
+        color="blue",
+        linewidth=2,
+        label="Scaled non-members",
+    )
+
+    # Fill only where hU > hN (excess mass)
+    ax.fill_between(
+        centers,
+        hU,
+        hN,
+        where=(hU > hN),
+        color="orange",
+        alpha=0.4,
+        interpolate=True,
+        label="Excess mass = members (LBE)",
+    )
+
+    # Labels and formatting
+    ax.set_xlabel("Score")
+    ax.set_ylabel("Density")
+    ax.set_ylim(bottom=0)
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.set_title(
+        f"LBE estimation of p using histograms | Estimated p = {estimated_p:.2f}"
+    )
+    fig.savefig("../histograms/hist.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def _lbe_nu_estimate_p_robust(
     scores_U: np.ndarray,
     scores_N: np.ndarray,
@@ -21,7 +72,7 @@ def _lbe_nu_estimate_p_robust(
     min_bin_count_N: int = 5,
     min_bin_count_U: int = 1,
     relax: float | str = "auto",
-    auto_relax_scale: float = 2.0
+    auto_relax_scale: float = 2.0,
 ) -> float:
     U = np.asarray(scores_U, float).ravel()
     N = np.asarray(scores_N, float).ravel()
@@ -38,16 +89,21 @@ def _lbe_nu_estimate_p_robust(
     cN, _ = np.histogram(Nc, bins=edges)
     mask = (cN >= min_bin_count_N) & (cU >= min_bin_count_U)
     if not np.any(mask):
-        mask = (cN >= min_bin_count_N)
+        mask = cN >= min_bin_count_N
     bw = np.diff(edges)
     hU = cU / (nU * bw)
     hN = cN / (nN * bw)
+
     if relax == "auto":
         relax = auto_relax_scale / min(nU, nN)
     denom = np.maximum(hN[mask], 1e-12)
     ratios = (hU[mask] + float(relax)) / denom
     piN_hat = float(np.clip(np.min(ratios), 0.0, 1.0))
-    return float(np.clip(1.0 - piN_hat, 0.0, 1.0))
+
+    estimated_p = float(np.clip(1.0 - piN_hat, 0.0, 1.0))
+    plot_hist_with_excess(hU, piN_hat * hN, edges, estimated_p)
+    return estimated_p
+
 
 class LBEWithPrior(BaseEstimator):
     """
@@ -56,8 +112,16 @@ class LBEWithPrior(BaseEstimator):
       s==0 -> unlabeled (U)
     Trains a scorer with lbe_train, uses predict_proba, and runs robust histogram LBE on that score.
     """
-    def __init__(self, bins=80, relax="auto", tail_trim=0.001,
-                 min_bin_count_N=5, min_bin_count_U=1, proba_index=1):
+
+    def __init__(
+        self,
+        bins=30,
+        relax="auto",
+        tail_trim=0.001,
+        min_bin_count_N=5,
+        min_bin_count_U=1,
+        proba_index=1,
+    ):
         self.bins = bins
         self.relax = relax
         self.tail_trim = tail_trim
@@ -69,7 +133,7 @@ class LBEWithPrior(BaseEstimator):
 
     def fit(self, X, s):
         # Train the scorer once (do NOT train on test when evaluating)
-        self.model = lbe_train(X, s, kind='LR', epochs=250)  # <- your function
+        self.model = lbe_train(X, s, kind="LR", epochs=250)  # <- your function
         # Estimate p on this dataset
         self.pi = self._estimate_p_from_X_and_s(X, s)
         return self
@@ -112,12 +176,13 @@ class LBEWithPrior(BaseEstimator):
             scores_N = 1.0 - scores_N
 
         p_hat = _lbe_nu_estimate_p_robust(
-            scores_U, scores_N,
+            scores_U,
+            scores_N,
             bins=self.bins,
             tail_trim=self.tail_trim,
             min_bin_count_N=self.min_bin_count_N,
             min_bin_count_U=self.min_bin_count_U,
-            relax=self.relax
+            relax=self.relax,
         )
         return p_hat
 
@@ -134,10 +199,11 @@ class LBEWithPrior(BaseEstimator):
             scores_U = 1.0 - scores_U
             scores_N = 1.0 - scores_N
         return _lbe_nu_estimate_p_robust(
-            scores_U, scores_N,
+            scores_U,
+            scores_N,
             bins=self.bins,
             tail_trim=self.tail_trim,
             min_bin_count_N=self.min_bin_count_N,
             min_bin_count_U=self.min_bin_count_U,
-            relax=self.relax
+            relax=self.relax,
         )
