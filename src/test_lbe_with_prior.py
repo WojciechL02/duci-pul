@@ -226,6 +226,7 @@ def experiment_lbe_with_prior(
         "p_hat_test",
         "p_hat",
         "pi_hat",
+        "standard_pi_hat",
         "internal_pi",
         "TPR",
         "FPR",
