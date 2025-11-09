@@ -84,13 +84,19 @@ def _lbe_nu_estimate_p_robust(
     hi = np.quantile(both, 1 - tail_trim)
     Uc = U[(U >= lo) & (U <= hi)]
     Nc = N[(N >= lo) & (N <= hi)]
-    edges = np.linspace(lo, hi, bins + 1)
+
+    # NEW CODE:
+    edges = np.quantile(both, np.linspace(lo, hi, bins + 1))
+    # OLD CODE:
+    # edges = np.linspace(lo, hi, bins + 1)
+
     cU, _ = np.histogram(Uc, bins=edges)
     cN, _ = np.histogram(Nc, bins=edges)
     mask = (cN >= min_bin_count_N) & (cU >= min_bin_count_U)
     if not np.any(mask):
         mask = cN >= min_bin_count_N
     bw = np.diff(edges)
+    bw[bw == 0] = 1e-12  # prevent division by zero
     hU = cU / (nU * bw)
     hN = cN / (nN * bw)
 
@@ -101,7 +107,7 @@ def _lbe_nu_estimate_p_robust(
     piN_hat = float(np.clip(np.min(ratios), 0.0, 1.0))
 
     estimated_p = float(np.clip(1.0 - piN_hat, 0.0, 1.0))
-    plot_hist_with_excess(hU, piN_hat * hN, edges, estimated_p)
+    # plot_hist_with_excess(hU, piN_hat * hN, edges, estimated_p)
     return estimated_p
 
 
