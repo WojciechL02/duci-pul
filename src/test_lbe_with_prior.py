@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 import numpy as np
 import numpy as np
 import os
@@ -47,16 +48,24 @@ def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     """
     np.random.seed(seed)
 
-    # choose source file by model prefix
-    file_type = "loss" if name.startswith("mar_") else "cfg"
+    folder = Path("../data")
+    pattern1 = f"{name}_*train.npz"
+    pattern2 = f"{name}_*val.npz"
+
+    matches1 = list(folder.glob(pattern1))
+    matches2 = list(folder.glob(pattern2))
+    if not matches1 or not matches2:
+        raise FileNotFoundError(
+            f"No files found for patterns: {pattern1} or {pattern2} in {folder}"
+        )
 
     members = np.load(
-        f"../data/{name}_llm_mia_{file_type}_5k_real_imagenet_train.npz",
+        matches1[0],
         allow_pickle=True,
     )
     X_mem = members["data"]
     nonmembers = np.load(
-        f"../data/{name}_llm_mia_{file_type}_5k_real_imagenet_val.npz",
+        matches2[0],
         allow_pickle=True,
     )
     X_nonmem = nonmembers["data"]
@@ -350,11 +359,16 @@ def experiment_lbe_with_prior(
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
 
+        model_name = name.split("/")[1] if "/" in name else name
         formatted.to_csv(
-            f"{results_dir}/results_lbe_prior_{name}_p={p_}.csv", index=False, sep="\t"
+            f"{results_dir}/results_lbe_prior_{model_name}_p={p_}.csv",
+            index=False,
+            sep="\t",
         )
         df.to_csv(
-            f"{results_dir}/results_lbe_prior_full_{name}_p={p_}.csv", index=False, sep="\t"
+            f"{results_dir}/results_lbe_prior_full_{model_name}_p={p_}.csv",
+            index=False,
+            sep="\t",
         )
 
     # Print the true unlabeled members ratio vs. estimated ratio
