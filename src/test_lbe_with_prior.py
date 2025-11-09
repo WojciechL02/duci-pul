@@ -199,7 +199,7 @@ def estimate_p_test_from_trainN(
 
 
 def experiment_lbe_with_prior(
-    name, nsym, unl_mem_ratio=0.5, results_dir="../results", p=0.5, bins=10
+    name, nsym, unl_mem_ratio=0.5, results_dir="../results", p=0.5, bins=10, device=1
 ):
     """
     Run the experiment with LBE using internal prior.
@@ -218,6 +218,8 @@ def experiment_lbe_with_prior(
         The directory to save the results.
     bins : int
         The number of bins for the LBE model (default: 10).
+    device : int
+        Device to use for LBE training (default: 1).
     """
 
     metrics = [
@@ -245,7 +247,7 @@ def experiment_lbe_with_prior(
 
         start_time = time.time()
         # Use the LBEWithPrior model
-        model = LBEWithPrior(bins=bins)
+        model = LBEWithPrior(bins=bins, device=device)
         model.fit(X_train, s_train)
         end_time = time.time()
         run_time = end_time - start_time
@@ -413,10 +415,17 @@ def main():
         required=False,
         help="Number of bins for the LBE model (default: 10)",
     )
+    parser.add_argument(
+        "-device",
+        type=int,
+        default=1,
+        required=False,
+        help="Device to use for LBE training (default: 1)",
+    )
     args = parser.parse_args()
 
     experiment_lbe_with_prior(
-        args.data, args.nsym, args.unl_mem_ratio, args.results, bins=args.bins
+        args.data, args.nsym, args.unl_mem_ratio, args.results, bins=args.bins, device=args.device
     )
 
 

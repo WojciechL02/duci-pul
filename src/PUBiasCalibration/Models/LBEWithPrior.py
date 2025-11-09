@@ -1,8 +1,9 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import os
 import torch
 from PUBiasCalibration.helper_files.lbe.LBE import lbe_train, lbe_predict_proba
 from sklearn.base import BaseEstimator
-import matplotlib.pyplot as plt
 
 
 def seed(seed):
@@ -59,7 +60,12 @@ def plot_hist_with_excess(hU, hN, edges, estimated_p):
     ax.set_title(
         f"LBE estimation of p using histograms | Estimated p = {estimated_p:.2f}"
     )
-    fig.savefig("../histograms/hist.png", bbox_inches="tight")
+    # Create histograms directory if it doesn't exist
+    histograms_dir = "../histograms"
+    if not os.path.exists(histograms_dir):
+        os.makedirs(histograms_dir)
+
+    fig.savefig(os.path.join(histograms_dir, "hist.png"), bbox_inches="tight")
     plt.close(fig)
 
 
@@ -121,6 +127,7 @@ class LBEWithPrior(BaseEstimator):
         min_bin_count_N=5,
         min_bin_count_U=1,
         proba_index=1,
+        device=1,
     ):
         self.bins = bins
         self.relax = relax
@@ -128,12 +135,13 @@ class LBEWithPrior(BaseEstimator):
         self.min_bin_count_N = min_bin_count_N
         self.min_bin_count_U = min_bin_count_U
         self.proba_index = proba_index
+        self.device = f"cuda:{device}"
         self.model = None
         self.pi = None  # estimated prevalence on the last fit() dataset
 
     def fit(self, X, s):
         # Train the scorer once (do NOT train on test when evaluating)
-        self.model = lbe_train(X, s, kind="LR", epochs=250)  # <- your function
+        self.model = lbe_train(X, s, kind="LR", epochs=250, device=self.device)  # <- your function
         # Estimate p on this dataset
         self.pi = self._estimate_p_from_X_and_s(X, s)
         return self
