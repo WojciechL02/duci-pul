@@ -61,21 +61,28 @@ def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     train_fp = np.load(f"../data/{name}_llm_mia_{file_type}_5k_fp_s0.5_imagenet_train.npz", allow_pickle=True)
     X_train_fp = train_fp["data"]
 
-    # shuffle
-    X_val_tp = X_val_tp[np.random.permutation(len(X_val_tp))]
-    X_val_fp = X_val_fp[np.random.permutation(len(X_val_fp))]
-    X_train_tp = X_train_tp[np.random.permutation(len(X_train_tp))]
-    X_train_fp = X_train_fp[np.random.permutation(len(X_train_fp))]
-
-    # CONTROL features
+    # CONTROL features (load per split to keep 1:1 alignment with MIA)
     control_prefix = "ControlSEnsemble"
     X_ctrl_train_fp = load_features(f"../data/{control_prefix}_5k_fp_s0.5_imagenet_train.npz")
     X_ctrl_train_tp = load_features(f"../data/{control_prefix}_5k_tp_s0.5_imagenet_train.npz")
-    X_ctrl_val_fp = load_features(f"../data/{control_prefix}_5k_fp_s0.5_imagenet_val.npz")
-    X_ctrl_val_tp = load_features(f"../data/{control_prefix}_5k_tp_s0.5_imagenet_val.npz")
+    X_ctrl_val_fp   = load_features(f"../data/{control_prefix}_5k_fp_s0.5_imagenet_val.npz")
+    X_ctrl_val_tp   = load_features(f"../data/{control_prefix}_5k_tp_s0.5_imagenet_val.npz")
 
-    X_ctrl_all = np.concatenate([X_ctrl_train_tp, X_ctrl_train_fp, X_ctrl_val_tp, X_ctrl_val_fp], axis=0)
-    np.random.shuffle(X_ctrl_all)
+    # --- IMPORTANT: use identical permutations per split for BOTH MIA and CONTROL to avoid misalignment ---
+    perm_val_tp   = np.random.permutation(len(X_val_tp))
+    perm_val_fp   = np.random.permutation(len(X_val_fp))
+    perm_train_tp = np.random.permutation(len(X_train_tp))
+    perm_train_fp = np.random.permutation(len(X_train_fp))
+
+    X_val_tp   = X_val_tp[perm_val_tp]
+    X_val_fp   = X_val_fp[perm_val_fp]
+    X_train_tp = X_train_tp[perm_train_tp]
+    X_train_fp = X_train_fp[perm_train_fp]
+
+    X_ctrl_val_tp   = X_ctrl_val_tp[perm_val_tp]
+    X_ctrl_val_fp   = X_ctrl_val_fp[perm_val_fp]
+    X_ctrl_train_tp = X_ctrl_train_tp[perm_train_tp]
+    X_ctrl_train_fp = X_ctrl_train_fp[perm_train_fp]
 
     # -----------------------------
     # Train set construction
@@ -86,15 +93,24 @@ def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     y_train_nonmem = np.ones(len(X_train_nonmem), dtype=int)     # nonmembers=1
     s_train_nonmem = np.ones(len(X_train_nonmem), dtype=int)     # known negatives
 
+    # aligned CONTROL for labeled negatives (same indices/order as above)
+    X_ctrl_train_nonmem = np.concatenate([X_ctrl_val_tp[:n_lab_from_tp], X_ctrl_val_fp[:n_lab_from_fp]])
+
     n_unl_mem = int(2000 * unl_mem_ratio)
     n_unl_nonmem = 2000 - n_unl_mem
     X_train_unl = np.concatenate([X_train_tp[:n_unl_mem], X_train_fp[:n_unl_nonmem]])
     y_train_unl = np.concatenate([np.zeros(n_unl_mem, dtype=int), np.ones(n_unl_nonmem, dtype=int)])
     s_train_unl = np.zeros(len(X_train_unl), dtype=int)          # unlabeled
 
+    # aligned CONTROL for unlabeled portion (same indices/order as above)
+    X_ctrl_train_unl = np.concatenate([X_ctrl_train_tp[:n_unl_mem], X_ctrl_train_fp[:n_unl_nonmem]])
+
+    # combine train
     X_train = np.concatenate([X_train_nonmem, X_train_unl])
     y_train = np.concatenate([y_train_nonmem, y_train_unl])
     s_train = np.concatenate([s_train_nonmem, s_train_unl])
+
+    X_ctrl_train = np.concatenate([X_ctrl_train_nonmem, X_ctrl_train_unl])
 
     # -----------------------------
     # Test set (unlabeled only), size fixed like script2 (2000), or keep original rule?
@@ -115,19 +131,26 @@ def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     X_test = X_test_unl
     y_test = y_test_unl
 
+    # aligned CONTROL for test unlabeled (same offsets as MIA)
+    X_ctrl_test_unl = np.concatenate([
+        X_ctrl_train_tp[n_unl_mem: n_unl_mem + n_pos_test],
+        X_ctrl_train_fp[n_unl_nonmem: n_unl_nonmem + n_unl_test_nonmem]
+    ])
+    X_ctrl_test = X_ctrl_test_unl
+
     # --- scale MIA features ---
     X_train = X_train.squeeze(1)
-    X_test = X_test.squeeze(1)
+    X_test  = X_test.squeeze(1)
     scaler_mia = MinMaxScaler()
     X_train = scaler_mia.fit_transform(X_train)
-    X_test = scaler_mia.transform(X_test)
+    X_test  = scaler_mia.transform(X_test)
 
-    # --- scale & align CONTROL features ---
-    X_ctrl_all = X_ctrl_all.squeeze(1)
+    # --- scale CONTROL features (aligned to the same rows as MIA) ---
+    X_ctrl_train = X_ctrl_train.squeeze(1)
+    X_ctrl_test  = X_ctrl_test.squeeze(1)
     scaler_ctrl = MinMaxScaler()
-    X_ctrl_all = scaler_ctrl.fit_transform(X_ctrl_all)
-    X_ctrl_train = X_ctrl_all[:len(X_train)]
-    X_ctrl_test = X_ctrl_all[len(X_train):len(X_train) + len(X_test)]
+    X_ctrl_train = scaler_ctrl.fit_transform(X_ctrl_train)
+    X_ctrl_test  = scaler_ctrl.transform(X_ctrl_test)
 
     return X_train, X_test, y_train, y_test, s_train, X_ctrl_train, X_ctrl_test
 
@@ -153,7 +176,7 @@ def experiment_lbe_two_scorers(name, nsym, p, unl_mem_ratio=0.5, results_dir="..
 
         # --- standardize feature spaces used for LBE scorers (match distributions) --- ### CHANGED
         sc_ctrl = StandardScaler().fit(X_ctrl_train)
-        sc_mia = StandardScaler().fit(X_mia_train)
+        sc_mia  = StandardScaler().fit(X_mia_train)
 
         Xc_tr = sc_ctrl.transform(X_ctrl_train)
         Xc_te = sc_ctrl.transform(X_ctrl_test)
