@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import time
 from pathlib import Path
+from sklearn.linear_model import LinearRegression  # residualization
 from sklearn.metrics import accuracy_score, balanced_accuracy_score
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import MinMaxScaler
@@ -14,7 +15,30 @@ from PUBiasCalibration.Models.LBEWithPrior import (
     seed,
     _lbe_nu_estimate_p_robust,
 )
+from PUBiasCalibration.helper_files import choose_threshold_nu, debias_target, estimate_p_and_debias
 
+
+def load_features(npz_path):
+    """Robust loader that grabs the first ndarray inside npz and cleans NaNs."""
+    data = np.load(npz_path, allow_pickle=True)
+    arrays = [v for v in data.values() if isinstance(v, np.ndarray)]
+    if not arrays:
+        raise ValueError(f"No arrays found in {npz_path}")
+    arr = arrays[0]
+    if arr.dtype == object:
+        try:
+            arr = np.stack(arr)
+        except Exception:
+            arr = np.array([np.array(a) for a in arr])
+    return np.nan_to_num(arr, nan=0.0)
+
+def safe_logit(p):
+    eps = 1e-6
+    p = np.clip(p, eps, 1 - eps)
+    return np.log(p / (1 - p))
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     """
@@ -31,12 +55,10 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
 
     Returns
     -------
-    X_train : (n_train, d) float32
     X_test  : (n_test, d) float32
-    y_train : (n_train,) int   # true labels: members=0, nonmembers=1
     y_test  : (n_test,)  int   # true labels: members=0, nonmembers=1
-    s_train : (n_train,) int   # observed NU labels: 1 = known negatives (N), 0 = unlabeled (U)
     s_test  : (n_test,)  int   # observed NU labels for test (here: all 0 = unlabeled)
+    X_ctrl_test : (n_test, d) float32  # for correction only
     """
     np.random.seed(seed)
 
@@ -56,6 +78,17 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     # Pattern 6: contains _from-nonmem
     nonmem_pattern3 = f"{name}_*from-nonmem*.npz"
 
+    control_pattern = "ControlSEnsemble"
+    # Pattern 7: contains _ae_mem
+    mem_pattern4 = f"{control_pattern}_*ae_mem*.npz"
+    # Pattern 8: contains _ae_nonmem
+    nonmem_pattern4 = f"{control_pattern}_*ae_nonmem*.npz"
+    # Pattern 9: contains _from-mem
+    mem_pattern5 = f"{control_pattern}_*from-mem*.npz"
+    # Pattern 10: contains _from-nonmem
+    nonmem_pattern5 = f"{control_pattern}_*from-nonmem*.npz"
+
+
     # Try to find files matching the patterns
     mem_matches1 = list(folder.glob(mem_pattern1))
     nonmem_matches1 = list(folder.glob(nonmem_pattern1))
@@ -63,6 +96,10 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     nonmem_matches2 = list(folder.glob(nonmem_pattern2))
     mem_matches3 = list(folder.glob(mem_pattern3))
     nonmem_matches3 = list(folder.glob(nonmem_pattern3))
+    mem_matches4 = list(folder.glob(mem_pattern4))
+    nonmem_matches4 = list(folder.glob(nonmem_pattern4))
+    mem_matches5 = list(folder.glob(mem_pattern5))
+    nonmem_matches5 = list(folder.glob(nonmem_pattern5))
 
     # Select patterns based on run_type
     if run_type == "real":
@@ -70,7 +107,7 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         mem_matches = mem_matches1
         nonmem_matches = nonmem_matches1
         print(f"Run type: {run_type} - Using patterns 1 & 2 (real)")
-    elif run_type == "synth":
+    elif run_type == "synth" or run_type == "correction":
         # For synth: Use pattern1 & pattern2 and pattern5 & pattern6 (files containing _real_*mem, _real_*nonmem, _from-mem, and _from-nonmem)
         mem_matches = mem_matches1 + mem_matches3
         nonmem_matches = nonmem_matches1 + nonmem_matches3
@@ -123,6 +160,16 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     )
     X_nonmem_generated = nonmembers_generated["data"]
 
+    if run_type =="correction":
+        # For synth: Use pattern1 & pattern2 and pattern5 & pattern6 (files containing _real_*mem, _real_*nonmem, _from-mem, and _from-nonmem)
+        ctrl_mem_matches = mem_matches4 + mem_matches5
+        ctrl_nonmem_matches = nonmem_matches4 + nonmem_matches5
+
+        X_ctrl_ae_mem = load_features(mem_matches4[0])
+        X_ctrl_ae_nonmem = load_features(nonmem_matches4[0])
+        X_ctrl_mem_generated   = load_features(mem_matches5[0])
+        X_ctrl_nonmem_generated   = load_features(nonmem_matches5[0])
+
     # shuffle with one permutation for all arrays
     # Generate a single permutation large enough for all arrays
     perm = np.random.permutation(max(len(X_mem), len(X_nonmem), len(X_mem_generated), len(X_nonmem_generated)))
@@ -131,6 +178,13 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     X_nonmem = X_nonmem[perm[:len(X_nonmem)]]
     X_mem_generated = X_mem_generated[perm[:len(X_mem_generated)]]
     X_nonmem_generated = X_nonmem_generated[perm[:len(X_nonmem_generated)]]
+
+    if run_type == "correction":
+        X_ctrl_ae_mem = X_ctrl_ae_mem[perm[:len(X_ctrl_ae_mem)]]
+        X_ctrl_ae_nonmem = X_ctrl_ae_nonmem[perm[:len(X_ctrl_ae_nonmem)]]
+        X_ctrl_mem_generated = X_ctrl_mem_generated[perm[:len(X_ctrl_mem_generated)]]
+        X_ctrl_nonmem_generated = X_ctrl_nonmem_generated[perm[:len(X_ctrl_nonmem_generated)]]
+
     # -----------------------------
     # Test set construction (unlabeled only)
     # -----------------------------
@@ -154,7 +208,7 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
             ]
         )
 
-    X_test_unl = np.concatenate(
+    X_test = np.concatenate(
         [
             X_test_nonmem,
             X_mem[:n_pos_test],
@@ -162,16 +216,13 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         ]
     )
 
-    y_test_unl = np.concatenate(
+    y_test = np.concatenate(
         [
             np.ones(2000, dtype=int), #NM_labeled (possibly generated in run_tymes synth)
             np.zeros(n_pos_test, dtype=int),  # Umembers
             np.ones(n_unl_test_nonmem, dtype=int),  # Unon-members
         ]
     )
-
-    X_test = X_test_unl
-    y_test = y_test_unl
 
     s_test = np.concatenate(
         [
@@ -181,15 +232,32 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         ]
     )
 
-
     # scale
-    # X_train = X_train.squeeze(1)
     X_test = X_test.squeeze(1)
     scaler = MinMaxScaler()
-    # X_train = scaler.fit_transform(X_train)
     X_test = scaler.fit_transform(X_test)
 
-    return X_test, y_test, s_test
+    if run_type == "correction":
+        X_ctrl_test_nonmem = np.concatenate(
+            [
+                X_ctrl_mem_generated[:n_pos_test],
+                X_ctrl_nonmem_generated[2000:2000 + n_unl_test_nonmem],
+            ]
+        )
+
+        X_ctrl_test = np.concatenate(
+            [
+                X_ctrl_test_nonmem,
+                X_ctrl_ae_mem[:n_pos_test],
+                X_ctrl_ae_nonmem[2000:2000 + n_unl_test_nonmem],
+            ]
+        )
+        # scale
+        X_ctrl_test = X_ctrl_test.squeeze(1)
+        scaler = MinMaxScaler()
+        X_ctrl_test = scaler.fit_transform(X_ctrl_test)
+
+    return X_test, y_test, s_test, (X_ctrl_test if run_type == "correction" else None)
 
 
 def estimate_p_test(
@@ -293,14 +361,13 @@ def experiment_lbe_with_prior(
     print("\n Method: LBE with internal prior")
     records = []
     for sym in np.arange(0, nsym, 1):
-        X_test, y_test, s_test = prepare_data(
+        X_test, y_test, s_test, X_ctrl_test = prepare_data(
             name=name, seed=sym, p=p, run_type=run_type
         )
         np.random.seed(sym)
         seed(sym)
-
-        start_time = time.time()
         # Use the LBEWithPrior model
+        start_time = time.time()
         model = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
         model.fit(X_test, s_test)
         end_time = time.time()
@@ -308,23 +375,86 @@ def experiment_lbe_with_prior(
 
         internal_pi = model.get_prior()
 
-        # Use for correction only
-        p_hat_test = estimate_p_test(
-            lbe_model=model,
-            X_test=X_test[2000:],
-            s_test=s_test[2000:],
-            X_train=X_test[:2000], # for known NM or generated
-            s_train=s_test[:2000], # for known NM or generated
-        )
+        if run_type == "correction" and X_ctrl_test is not None:
+            X_comb_test = np.hstack([X_ctrl_test, X_test])
 
-        prob_y_test = model.predict_proba(X_test)[:, 1]
+            # Fit LBEWithPrior on CONTROL-only and COMBINED
+            start_time = time.time()
+            mdl_ctrl = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+            mdl_ctrl.fit(X_ctrl_test, s_test)
 
-        # Flip labels
-        prob_y_test = 1 - prob_y_test
-        y_test = 1 - y_test
+            mdl_comb = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+            mdl_comb.fit(X_comb_test, s_test)
+            end_time = time.time()
+            run_time = end_time - start_time
 
-        acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-        bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            mdl_comb._fit_runtime = run_time  # stash for logging
+
+            internal_pi_ctrl = mdl_ctrl.get_prior()
+            internal_pi_comb = mdl_comb.get_prior()
+
+            # ---------- residualization (in logit space) ----------
+            # Get member-like probs from both scorers
+            p_ctrl_test = mdl_ctrl.predict_proba(X_ctrl_test)[:, 1]
+            p_comb_test = mdl_comb.predict_proba(X_comb_test)[:, 1]
+
+            # logit + OLS: comb ~ ctrl  (remove control-explained component)
+            l_ctrl_test = safe_logit(p_ctrl_test)
+            l_comb_test = safe_logit(p_comb_test)
+
+            ols = LinearRegression().fit(l_ctrl_test.reshape(-1, 1), l_comb_test)
+
+            l_comb_pred_test = ols.predict(l_ctrl_test.reshape(-1, 1))
+
+            l_resid_test = l_comb_test - l_comb_pred_test
+
+            prob_test_corrected = np.clip(sigmoid(l_resid_test), 0.0, 1.0)
+
+            # Orientation: metrics expect "non-member = 1"
+            prob_test_nm = 1.0 - prob_test_corrected
+            y_test_eval = 1 - y_test
+
+            # For internal-prior thresholding, we need neg_scores in the SAME space:
+            neg_scores_nm = prob_test_nm[s_test == 1]  # known negatives (non-members)
+
+            # Threshold via internal prior (Script1/2-style)
+            best = choose_threshold_nu(prob_test_nm, neg_scores_nm, internal_pi_comb)
+
+            # Debias TEST using TRAIN-derived TPR/FPR at that threshold
+            debias_result = debias_target(prob_test_nm, best["thr"], best["TPR"], best["FPR"])
+
+            # Standard PU estimate for reporting (not used for main estimate)
+            standard_result = estimate_p_and_debias(prob_test_nm, neg_scores_nm)
+
+            # Compute p_hat_test (Script1/2-style) using raw mdl_comb distributions
+            p_hat_test = estimate_p_test(
+                lbe_model=mdl_comb,
+                X_test=X_comb_test[2000:],
+                s_test=s_test[2000:],
+                X_train=X_comb_test[:2000],
+                s_train=s_test[:2000],
+            )
+
+            # Classification metrics using 0.5 over non-member prob
+            acc = accuracy_score(y_test_eval, (prob_test_nm > 0.5).astype(int))
+            bacc = balanced_accuracy_score(y_test_eval, (prob_test_nm > 0.5).astype(int))
+        else:
+            p_hat_test = estimate_p_test(
+                lbe_model=model,
+                X_test=X_test[2000:],
+                s_test=s_test[2000:],
+                X_train=X_test[:2000], # for known NM or generated
+                s_train=s_test[:2000], # for known NM or generated
+            )
+
+            prob_y_test = model.predict_proba(X_test)[:, 1]
+
+            # Flip labels
+            prob_y_test = 1 - prob_y_test
+            y_test = 1 - y_test
+
+            acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
 
         results = {
             "method": "lbe_with_internal_prior",
@@ -335,6 +465,16 @@ def experiment_lbe_with_prior(
             "p_hat_through_scores_and_debiased": p_hat_test,
         }
 
+        if run_type == "correction" and X_ctrl_test is not None:
+            results.update(
+                {
+                    "p_hat_ctrl": internal_pi_ctrl,
+                    "p_hat_comb": internal_pi_comb,
+                    "p_hat_comb_corrected_debias": debias_result["p_hat"],
+                    "p_hat_comb_corrected_standard": standard_result["p_hat"],
+                    "pi_hat_comb_standard": standard_result["pi_hat"],
+                }
+            )
         # # Get negative samples (labeled negatives from X_train)
         # X_train_neg = X_train[s_train == 1]
         #
@@ -414,21 +554,19 @@ def experiment_lbe_with_prior(
 
     # Print the true unlabeled members ratio vs. estimated ratio
     print(f"\nTrue p: {p:.4f}")
-    # print(
-    #     f"Mean estimated ratio (internal pi): {df['internal_pi'].mean():.4f} ± {df['internal_pi'].std():.4f}"
-    # )
-    # print(
-    #     f"Mean estimated ratio (p_hat): {df['p_hat'].mean():.4f} ± {df['p_hat'].std():.4f}"
-    # )
+    if run_type == "correction":
+        print(
+            f"Mean estimated ratio (p_hat_comb_corrected_debias): {df['p_hat_comb_corrected_debias'].mean():.4f} ± {df['p_hat_comb_corrected_debias'].std():.4f}"
+        )
+        print(
+            f"Mean estimated ratio (p_hat_comb_corrected_standard): {df['p_hat_comb_corrected_standard'].mean():.4f} ± {df['p_hat_comb_corrected_standard'].std():.4f}"
+        )
     print(
         f"Mean estimated ratio (p_hat_test): {df['p_hat_test'].mean():.4f} ± {df['p_hat_test'].std():.4f}"
     )
     print(
         f"Mean estimated ratio (p_hat_through_scores_and_debiased): {df['p_hat_through_scores_and_debiased'].mean():.4f} ± {df['p_hat_through_scores_and_debiased'].std():.4f}"
     )
-    # print(
-    #     f"Mean estimated ratio (standard pi_hat): {df['standard_pi_hat'].mean():.4f} ± {df['standard_pi_hat'].std():.4f}"
-    # )
 
 
 def main():
@@ -486,7 +624,7 @@ def main():
         type=str,
         default="real",
         required=False,
-        choices=["real", "synth", "ae_synth"],
+        choices=["real", "synth", "ae_synth", "correction"],
         help="Type of run to perform: real (pattern1&2), synth (pattern1&2 and pattern5&6), ae_synth (pattern3&4 and pattern5&6) (default: real)",
     )
     args = parser.parse_args()
