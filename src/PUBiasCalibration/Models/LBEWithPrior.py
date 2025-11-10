@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import scienceplots
 import numpy as np
 import os
 import torch
@@ -15,57 +16,70 @@ def seed(seed):
     np.random.seed(seed)
 
 
-def plot_hist_with_excess(hU, hN, edges, estimated_p):
-    centers = 0.5 * (edges[1:] + edges[:-1])
+def plot_hist_with_excess(hU, hN, edges, model_name, real_p, estimated_p):
+    plt.style.use(["science", "no-latex"])
     bw = np.diff(edges)
+    bw[bw == 0] = 1e-12
 
     fig, ax = plt.subplots(figsize=(7, 4))
+    fontsize = 16
+    fontweight = "heavy"
 
     # Plot the two density curves
     ax.step(
-        edges[:-1],
-        hU,
+        edges,
+        np.append(hU, hU[-1]),
         where="post",
         color="orange",
-        linewidth=2,
-        label="Unlabeled mixture",
+        linewidth=1.5,
+        label="Scaled unlabeled",
     )
     ax.step(
-        edges[:-1],
-        hN,
+        edges,
+        np.append(hN, hN[-1]),
         where="post",
         color="blue",
-        linewidth=2,
+        linewidth=1.5,
         label="Scaled non-members",
     )
-
-    # Fill only where hU > hN (excess mass)
-    ax.fill_between(
-        centers,
-        hU,
-        hN,
-        where=(hU > hN),
+    # Plot the excess mass area
+    ax.bar(
+        x=edges[:-1],
+        height=hU - hN,
+        bottom=hN,
+        width=bw,
+        align="edge",
+        linewidth=0,
         color="orange",
-        alpha=0.4,
-        interpolate=True,
+        alpha=0.25,
+        zorder=-1,
         label="Excess mass = members (LBE)",
     )
 
     # Labels and formatting
-    ax.set_xlabel("Score")
-    ax.set_ylabel("Density")
-    ax.set_ylim(bottom=0)
-    ax.legend()
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.set_title(
-        f"LBE estimation of p using histograms | Estimated p = {estimated_p:.2f}"
+    ax.set_xlabel("Score", fontsize=fontsize, fontweight=fontweight)
+    ax.set_ylabel("Density", fontsize=fontsize, fontweight=fontweight)
+    ax.set_xscale("log")
+    ax.set_xlim(right=1.0)
+    ax.tick_params(axis="both", labelsize=fontsize, width=1)
+    ax.legend(
+        frameon=True,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=2,
+        prop={"weight": fontweight, "size": 14},
     )
-    # Create histograms directory if it doesn't exist
-    histograms_dir = "../histograms"
-    if not os.path.exists(histograms_dir):
-        os.makedirs(histograms_dir)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.set_title(f"Real p={real_p:.2f} | Estimated p={estimated_p:.2f}")
 
-    fig.savefig(os.path.join(histograms_dir, "hist.png"), bbox_inches="tight")
+    histograms_dir = "../histograms"
+    output_png = os.path.join(histograms_dir, f"{model_name}_p={real_p}.png")
+    output_pdf = os.path.join(histograms_dir, f"{model_name}_p={real_p}.pdf")
+    save_dir = os.path.dirname(output_png)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    plt.savefig(output_png, dpi=300, bbox_inches="tight")
+    plt.savefig(output_pdf, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -73,6 +87,8 @@ def _lbe_nu_estimate_p_robust(
     scores_U: np.ndarray,
     scores_N: np.ndarray,
     *,
+    model_name: str = None,
+    real_p: float = None,
     bins: int = 80,
     tail_trim: float = 0.001,
     min_bin_count_N: int = 5,
@@ -91,9 +107,7 @@ def _lbe_nu_estimate_p_robust(
     Uc = U[(U >= lo) & (U <= hi)]
     Nc = N[(N >= lo) & (N <= hi)]
 
-    # NEW CODE:
     edges = np.quantile(both, np.linspace(lo, hi, bins + 1))
-    # OLD CODE:
     # edges = np.linspace(lo, hi, bins + 1)
 
     cU, _ = np.histogram(Uc, bins=edges)
@@ -102,9 +116,11 @@ def _lbe_nu_estimate_p_robust(
     if not np.any(mask):
         mask = cN >= min_bin_count_N
     bw = np.diff(edges)
-    bw[bw == 0] = 1e-12  # prevent division by zero
+    bw[bw == 0] = 1e-12
     hU = cU / (nU * bw)
     hN = cN / (nN * bw)
+    hU_ = cU / nU
+    hN_ = cN / nN
 
     if relax == "auto":
         relax = auto_relax_scale / min(nU, nN)
@@ -113,7 +129,10 @@ def _lbe_nu_estimate_p_robust(
     piN_hat = float(np.clip(np.min(ratios), 0.0, 1.0))
 
     estimated_p = float(np.clip(1.0 - piN_hat, 0.0, 1.0))
-    # plot_hist_with_excess(hU, piN_hat * hN, edges, estimated_p)
+    if model_name is not None:
+        plot_hist_with_excess(
+            hU_, piN_hat * hN_, edges, model_name, real_p, estimated_p
+        )
     return estimated_p
 
 
