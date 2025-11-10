@@ -145,6 +145,8 @@ def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
 
 
 def estimate_p_test_from_trainN(
+    model_name,
+    real_p,
     lbe_model,
     X_test,
     s_test,
@@ -198,6 +200,8 @@ def estimate_p_test_from_trainN(
     p_hat_test = _lbe_nu_estimate_p_robust(
         scores_test_U,
         scores_train_N,
+        model_name=model_name,
+        real_p=real_p,
         bins=lbe_model.bins,
         tail_trim=lbe_model.tail_trim,
         min_bin_count_N=lbe_model.min_bin_count_N,
@@ -279,6 +283,8 @@ def experiment_lbe_with_prior(
             internal_pi = models[sym].get_prior()
 
             p_hat_test = estimate_p_test_from_trainN(
+                model_name=name,
+                real_p=p_,
                 lbe_model=models[sym],
                 X_test=X_test,
                 s_test=s_test,
