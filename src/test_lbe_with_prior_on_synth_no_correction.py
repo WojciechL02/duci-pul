@@ -447,5 +447,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-do those script do exacly the smae thing but on different datasets?
