@@ -123,24 +123,36 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     )
     X_nonmem_generated = nonmembers_generated["data"]
 
-    # shuffle
-    X_mem = X_mem[np.random.permutation(len(X_mem))]
-    X_nonmem = X_nonmem[np.random.permutation(len(X_nonmem))]
-    X_mem_generated =  X_mem_generated[np.random.permutation(len(X_mem_generated))]
-    X_nonmem_generated =  X_nonmem_generated[np.random.permutation(len(X_nonmem_generated))]
+    # shuffle with one permutation for all arrays
+    # Generate a single permutation large enough for all arrays
+    perm = np.random.permutation(max(len(X_mem), len(X_nonmem), len(X_mem_generated), len(X_nonmem_generated)))
+    # Apply the same permutation to all arrays (using appropriate slices)
+    X_mem = X_mem[perm[:len(X_mem)]]
+    X_nonmem = X_nonmem[perm[:len(X_nonmem)]]
+    X_mem_generated = X_mem_generated[perm[:len(X_mem_generated)]]
+    X_nonmem_generated = X_nonmem_generated[perm[:len(X_nonmem_generated)]]
     # -----------------------------
     # Test set construction (unlabeled only)
     # -----------------------------
-    # train_len = len(X_train)
-    X_test_nonmem = np.concatenate(
-        [
-            X_mem_generated[:1000],
-            X_nonmem_generated[1000:2000],
-        ]
-    )
     n_test_unl = test_len - 2000
     n_pos_test = int(n_test_unl * p)  # members inside test unlabeled
     n_unl_test_nonmem = n_test_unl - n_pos_test  # non-members inside test unlabeled
+
+    if run_type == "real":
+        X_test_nonmem = np.concatenate(
+            [
+                X_mem_generated[:1000],
+                X_nonmem_generated[1000:2000],
+            ]
+        )
+    else:
+        # generated data from examples in the suspect set
+        X_test_nonmem = np.concatenate(
+            [
+                X_mem_generated[:n_pos_test],
+                X_nonmem_generated[2000:2000 + n_unl_test_nonmem],
+            ]
+        )
 
     X_test_unl = np.concatenate(
         [
