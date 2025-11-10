@@ -182,7 +182,7 @@ def estimate_p_test_from_trainN(lbe_model, X_test, s_test, X_train, s_train, *, 
 # --------------------------- main experiment ---------------------------
 
 def experiment_residualized_lbe_with_prior(
-    name, nsym, unl_mem_ratio=0.5, results_dir="../results", bins=10, device=1
+    name, nsym, lbe_model, unl_mem_ratio=0.5, results_dir="../results", bins=10, device=1
 ):
     """
     Residualization kept (CONTROL vs CONTROL+MIA), but protocol matches Scripts 1/2:
@@ -226,10 +226,10 @@ def experiment_residualized_lbe_with_prior(
 
         # Fit LBEWithPrior on CONTROL-only and COMBINED
         start_time = time.time()
-        mdl_ctrl = LBEWithPrior(bins=bins, device=device)
+        mdl_ctrl = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
         mdl_ctrl.fit(Xc_tr, s_train)
 
-        mdl_comb = LBEWithPrior(bins=bins, device=device)
+        mdl_comb = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
         mdl_comb.fit(Xcm_tr, s_train)
         end_time = time.time()
         run_time = end_time - start_time
@@ -376,6 +376,9 @@ def main():
                              "rar_b, rar_l, rar_xl, rar_xxl, "
                              "mar_b, mar_l, mar_h")
     parser.add_argument('-nsym', type=int, required=True, help="Number of iterations/runs")
+    parser.add_argument('-lbe_model', type=str, default="LR", required=False,
+                        choices=["LR", "MLP"],
+                        help="Backbone for LBE: LR (default) or MLP")
     parser.add_argument('-unl_mem_ratio', type=float, default=0.5, required=False,
                         help="Unlabeled members ratio (0..1, default 0.5)")
     parser.add_argument('-results', type=str, default="../results", required=False,
@@ -389,6 +392,7 @@ def main():
     experiment_residualized_lbe_with_prior(
         name=args.data,
         nsym=args.nsym,
+        lbe_model=args.lbe_model,
         unl_mem_ratio=args.unl_mem_ratio,
         results_dir=args.results,
         bins=args.bins,
