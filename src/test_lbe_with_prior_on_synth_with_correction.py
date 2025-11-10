@@ -12,7 +12,11 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 import PUBiasCalibration.Models.LBE as lbe  # seed helper
 from PUBiasCalibration.Models.LBE import LBE  # ### CHANGED: use LBE as the scorer
-from PUBiasCalibration.helper_files.pu_metrics import estimate_p_and_debias
+from PUBiasCalibration.helper_files.pu_metrics import (
+    estimate_p_and_debias,      # kept for reporting (pi_hat/lowerbound)
+    choose_threshold_nu,        # explicit threshold selection using TRAIN only (Option A)
+    debias_target,              # explicit debiasing with TPR/FPR
+)
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
@@ -113,8 +117,7 @@ def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     X_ctrl_train = np.concatenate([X_ctrl_train_nonmem, X_ctrl_train_unl])
 
     # -----------------------------
-    # Test set (unlabeled only), size fixed like script2 (2000), or keep original rule?
-    # The example you pasted uses fixed 2000. We'll keep that for fidelity. ### CHANGED
+    # Test set (unlabeled only), size fixed like script2 (2000)
     # -----------------------------
     n_test_unl = 2000
     n_pos_test = int(n_test_unl * p)
@@ -155,13 +158,13 @@ def prepare_data(name, seed, p, unl_mem_ratio=0.5, test_size=0.2):
     return X_train, X_test, y_train, y_test, s_train, X_ctrl_train, X_ctrl_test
 
 
-# --- main experiment (two LBE scorers + residualization; debias on corrected probs) ---
+# --- main experiment (two LBE scorers + residualization; explicit TPR/FPR debiasing) ---
 
 def experiment_lbe_two_scorers(name, nsym, p, unl_mem_ratio=0.5, results_dir="../results"):
     records = []
     metrics = ["acc", "p_hat", "pi_hat", "TPR", "FPR", "J", "lowerbound", "bacc"]
 
-    print("\nMethod: LBE(control-only) vs LBE(control+MIA) → residualized; debias on corrected probs")
+    print("\nMethod: LBE(control-only) vs LBE(control+MIA) → residualized; explicit TPR/FPR debiasing on calibrated scores")
     for sym in np.arange(0, nsym, 1):
         # load data
         X_mia_train, X_mia_test, y_train, y_test, s_train, X_ctrl_train, X_ctrl_test = prepare_data(
@@ -174,7 +177,7 @@ def experiment_lbe_two_scorers(name, nsym, p, unl_mem_ratio=0.5, results_dir="..
 
         start_time = time.time()
 
-        # --- standardize feature spaces used for LBE scorers (match distributions) --- ### CHANGED
+        # --- standardize feature spaces used for LBE scorers (match distributions) ---
         sc_ctrl = StandardScaler().fit(X_ctrl_train)
         sc_mia  = StandardScaler().fit(X_mia_train)
 
@@ -183,22 +186,22 @@ def experiment_lbe_two_scorers(name, nsym, p, unl_mem_ratio=0.5, results_dir="..
         Xm_tr = sc_mia.transform(X_mia_train)
         Xm_te = sc_mia.transform(X_mia_test)
 
-        Xcm_tr = np.hstack([Xc_tr, Xm_tr])  # control + MIA (faithful to Option A)
+        Xcm_tr = np.hstack([Xc_tr, Xm_tr])  # control + MIA
         Xcm_te = np.hstack([Xc_te, Xm_te])
 
-        # --- LBE scorer #1: CONTROL-only --- ### CHANGED
-        lbe_ctrl = LBE()                 # ensure you use same hyperparams for both if configurable
+        # --- LBE scorer #1: CONTROL-only ---
+        lbe_ctrl = LBE()
         lbe_ctrl.fit(Xc_tr, s_train)     # fit with NU labels (known negatives vs unlabeled)
         p_ctrl_train = lbe_ctrl.predict_proba(Xc_tr)[:, 1]  # member-like prob
         p_ctrl_test  = lbe_ctrl.predict_proba(Xc_te)[:, 1]
 
-        # --- LBE scorer #2: CONTROL + MIA --- ### CHANGED
+        # --- LBE scorer #2: CONTROL + MIA ---
         lbe_comb = LBE()
         lbe_comb.fit(Xcm_tr, s_train)
         p_comb_train = lbe_comb.predict_proba(Xcm_tr)[:, 1]
         p_comb_test  = lbe_comb.predict_proba(Xcm_te)[:, 1]
 
-        # --- Residualization in logit space (comb ~ ctrl) --- ### CHANGED
+        # --- Residualization in logit space (comb ~ ctrl) ---
         l_ctrl_tr = safe_logit(p_ctrl_train)
         l_comb_tr = safe_logit(p_comb_train)
         l_ctrl_te = safe_logit(p_ctrl_test)
@@ -211,40 +214,54 @@ def experiment_lbe_two_scorers(name, nsym, p, unl_mem_ratio=0.5, results_dir="..
         l_resid_te = l_comb_te - l_comb_pred_te
         l_resid_tr = l_comb_tr - l_comb_pred_tr
 
-        prob_y_test_corrected  = np.clip(sigmoid(l_resid_te), 0.0, 1.0)    # member-like (corrected)
+        # Calibrated member-like probabilities
+        prob_y_test_corrected  = np.clip(sigmoid(l_resid_te), 0.0, 1.0)
         prob_y_train_corrected = np.clip(sigmoid(l_resid_tr), 0.0, 1.0)
 
-        # --- Evaluation + debiasing strictly on corrected probs (no mixing) --- ### CHANGED
-        # flip orientation to nonmember=1 for metrics & debias (as in your scripts)
+        # --- Orientation: flip to make "non-member = 1" for metrics & debiasing ---
         prob_y_test = 1 - prob_y_test_corrected
-        y_test_eval = 1 - y_test
 
+        # TRAIN-based thresholding & TPR/FPR (Option A)
+        # U (unlabeled) and N (known negatives) from TRAIN, in the same corrected space
+        prob_y_train = 1 - prob_y_train_corrected  # non-member = 1
+        train_U_probs = prob_y_train[s_train == 0]  # unlabeled (mixture)
+        train_N_probs = prob_y_train[s_train == 1]  # known negatives
+
+        # Choose threshold and compute TPR/FPR using TRAIN only
+        # internal prior is not used here; we follow Option A strictly.
+        best = choose_threshold_nu(train_U_probs, train_N_probs, internal_pi=None)
+
+        # Explicit debiasing on TEST with TRAIN-derived threshold/TPR/FPR
+        debias_result = debias_target(prob_y_test, best["thr"], best["TPR"], best["FPR"])
+
+        # Also compute standard PU estimate for reporting-only fields (pi_hat, lowerbound)
+        # (This does NOT affect our explicit debiasing result.)
+        standard_result = estimate_p_and_debias(prob_y_test, train_N_probs)
+
+        # classification metrics (using 0.5 threshold over non-member prob for reporting)
+        y_test_eval = 1 - y_test
         acc  = accuracy_score(y_test_eval, np.where(prob_y_test > 0.5, 1, 0))
         bacc = balanced_accuracy_score(y_test_eval, np.where(prob_y_test > 0.5, 1, 0))
-
-        # negative reference scores (known negatives in train) in the SAME corrected space
-        neg_scores = 1 - prob_y_train_corrected[s_train == 1]  # flip to nonmember=1
-
-        # prevalence & debiasing on corrected scores
-        p_hat_results = estimate_p_and_debias(prob_y_test, neg_scores)
 
         end_time = time.time()
         run_time = end_time - start_time
 
         results = {
-            "method": "lbe_ctrl_vs_comb_residual",
+            "method": "lbe_ctrl_vs_comb_residual_tprfpr",
             "run": int(sym) + 1,
             "acc": acc,
             "bacc": bacc,
-            "p_hat": p_hat_results["p_hat"],
-            "pi_hat": p_hat_results["pi_hat"],
-            "ci_low": p_hat_results["ci_low"],
-            "ci_high": p_hat_results["ci_high"],
-            "threshold": p_hat_results["threshold"],
-            "TPR": p_hat_results["TPR"],
-            "FPR": p_hat_results["FPR"],
-            "J": p_hat_results["J"],
-            "lowerbound": p_hat_results["lowerbound"],
+            # Our explicit TPR/FPR debiasing result:
+            "p_hat": debias_result["p_hat"],
+            "TPR": debias_result["TPR"],
+            "FPR": debias_result["FPR"],
+            "J": debias_result["J"],
+            "threshold": debias_result["threshold"],
+            "ci_low": debias_result.get("ci_low", np.nan),
+            "ci_high": debias_result.get("ci_high", np.nan),
+            # Reporting-only from standard estimator (not used for our primary estimate):
+            "pi_hat": standard_result.get("pi_hat", np.nan),
+            "lowerbound": standard_result.get("lowerbound", np.nan),
             "time": run_time,
         }
         print(results)
