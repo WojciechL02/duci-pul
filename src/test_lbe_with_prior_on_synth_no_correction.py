@@ -215,7 +215,7 @@ def estimate_p_test_from_trainN(
 
 
 def experiment_lbe_with_prior(
-    name, nsym, unl_mem_ratio=0.5, results_dir="../results", p=0.5, bins=10, device=1
+    name, nsym, lbe_model, unl_mem_ratio=0.5, results_dir="../results", p=0.5, bins=10, device=1
 ):
     """
     Run the experiment with LBE using internal prior.
@@ -226,6 +226,8 @@ def experiment_lbe_with_prior(
         The name of the dataset.
     nsym : int
         The number of iterations.
+    lbe_model : str
+        Backbone for LBEWithPrior: 'LR' (Logistic Regression) or 'MLP'.
     p : float
         The probability value.
     unl_mem_ratio : float
@@ -262,8 +264,8 @@ def experiment_lbe_with_prior(
         seed(sym)
 
         start_time = time.time()
-        # Use the LBEWithPrior model
-        model = LBEWithPrior(bins=bins, device=device)
+        # Use the LBEWithPrior model (now with selectable backbone)
+        model = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
         model.fit(X_train, s_train)
         end_time = time.time()
         run_time = end_time - start_time
@@ -411,6 +413,14 @@ def main():
     #     "-prob", type=float, required=True, help="Probability value (between 0 and 1)"
     # )
     parser.add_argument(
+        "-lbe_model",
+        type=str,
+        default="LR",
+        required=False,
+        choices=["LR", "MLP"],
+        help="Backbone for LBEWithPrior: LR (Logistic Regression, default) or MLP (Multi-layer Perceptron)",
+    )
+    parser.add_argument(
         "-unl_mem_ratio",
         type=float,
         default=0.5,
@@ -441,7 +451,13 @@ def main():
     args = parser.parse_args()
 
     experiment_lbe_with_prior(
-        args.data, args.nsym, args.unl_mem_ratio, args.results, bins=args.bins, device=args.device
+        args.data,
+        args.nsym,
+        args.lbe_model,
+        args.unl_mem_ratio,
+        args.results,
+        bins=args.bins,
+        device=args.device,
     )
 
 
