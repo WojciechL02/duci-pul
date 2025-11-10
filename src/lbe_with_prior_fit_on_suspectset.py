@@ -16,7 +16,7 @@ from PUBiasCalibration.Models.LBEWithPrior import (
 )
 
 
-def prepare_data(name, seed, p, test_len=4000):
+def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     """
     Prepare data for the experiment.
 
@@ -41,66 +41,103 @@ def prepare_data(name, seed, p, test_len=4000):
     np.random.seed(seed)
 
     folder = Path("../data")
-    pattern1 = f"{name}_*real_*train.npz"
-    pattern2 = f"{name}_*real_*val.npz"
 
-    matches1 = list(folder.glob(pattern1))
-    matches2 = list(folder.glob(pattern2))
-    if not matches1 or not matches2:
+    # Define patterns for members and non-members
+    # Pattern 1: contains _real and _mem
+    mem_pattern1 = f"{name}_*real*_mem*.npz"
+    # Pattern 2: contains _real and _nonmem
+    nonmem_pattern1 = f"{name}_*real*_nonmem*.npz"
+    # Pattern 3: contains _ae_mem
+    mem_pattern2 = f"{name}_*ae_mem*.npz"
+    # Pattern 4: contains _ae_nonmem
+    nonmem_pattern2 = f"{name}_*ae_nonmem*.npz"
+    # Pattern 5: contains _from-mem
+    mem_pattern3 = f"{name}_*from-mem*.npz"
+    # Pattern 6: contains _from-nonmem
+    nonmem_pattern3 = f"{name}_*from-nonmem*.npz"
+
+    # Try to find files matching the patterns
+    mem_matches1 = list(folder.glob(mem_pattern1))
+    nonmem_matches1 = list(folder.glob(nonmem_pattern1))
+    mem_matches2 = list(folder.glob(mem_pattern2))
+    nonmem_matches2 = list(folder.glob(nonmem_pattern2))
+    mem_matches3 = list(folder.glob(mem_pattern3))
+    nonmem_matches3 = list(folder.glob(nonmem_pattern3))
+
+    # Select patterns based on run_type
+    if run_type == "real":
+        # For real: Use pattern1 & pattern2 (files containing _real_*mem and _real_*nonmem)
+        mem_matches = mem_matches1
+        nonmem_matches = nonmem_matches1
+        print(f"Run type: {run_type} - Using patterns 1 & 2 (real)")
+    elif run_type == "synth":
+        # For synth: Use pattern1 & pattern2 and pattern5 & pattern6 (files containing _real_*mem, _real_*nonmem, _from-mem, and _from-nonmem)
+        mem_matches = mem_matches1 + mem_matches3
+        nonmem_matches = nonmem_matches1 + nonmem_matches3
+        print(f"Run type: {run_type} - Using patterns 1, 2, 5 & 6 (real and from-mem)")
+    elif run_type == "ae_synth":
+        # For ae_synth: Use pattern3 & pattern4 and pattern5 & pattern6 (files containing _ae_mem, _ae_nonmem, _from-mem, and _from-nonmem)
+        mem_matches = mem_matches2 + mem_matches3
+        nonmem_matches = nonmem_matches2 + nonmem_matches3
+        print(f"Run type: {run_type} - Using patterns 3, 4, 5 & 6 (ae and from-mem)")
+    else:
         raise FileNotFoundError(
-            f"No files found for patterns: {pattern1} or {pattern2} in {folder}"
+            f"No matching files found for run_type {run_type} with member patterns: {mem_pattern1}, {mem_pattern2}, {mem_pattern3} "
+            f"and non-member patterns: {nonmem_pattern1}, {nonmem_pattern2}, {nonmem_pattern3} in {folder}"
         )
 
+    mem_file = mem_matches[0]
+    nonmem_file = nonmem_matches[0]
+
+    if len(mem_matches) > 1:
+        mem_file_generated = mem_matches[1]
+        nonmem_file_generated = nonmem_matches[1]
+    elif run_type == "real":
+        mem_file_generated = nonmem_matches[0] #in real we mix only real nonmembers.
+        nonmem_file_generated = nonmem_matches[0]
+    else:
+        print(f"No generated files found for run_type {run_type} with member patterns: {mem_pattern1}, {mem_pattern2}, {mem_pattern3} ")
+        return 1
+    print(f"Using files: {mem_file.name} and {nonmem_file.name}")
+
+
     members = np.load(
-        matches1[0],
+        mem_file,
         allow_pickle=True,
     )
     X_mem = members["data"]
     nonmembers = np.load(
-        matches2[0],
+        nonmem_file,
         allow_pickle=True,
     )
     X_nonmem = nonmembers["data"]
 
+    members_generated = np.load(
+        mem_file_generated,
+        allow_pickle=True,
+    )
+    X_mem_generated = members_generated["data"]
+    nonmembers_generated = np.load(
+        nonmem_file_generated,
+        allow_pickle=True,
+    )
+    X_nonmem_generated = nonmembers_generated["data"]
+
     # shuffle
     X_mem = X_mem[np.random.permutation(len(X_mem))]
     X_nonmem = X_nonmem[np.random.permutation(len(X_nonmem))]
-
-    # # -----------------------------
-    # # Train set construction
-    # # -----------------------------
-    # # 2000 known negatives (N) + 2000 unlabeled (U with unl_mem_ratio members)
-    # X_train_nonmem = X_nonmem[:2000]
-    #
-    # n_unl_mem = int(2000 * unl_mem_ratio)  # members inside unlabeled
-    # n_unl_nonmem = 2000 - n_unl_mem  # non-members inside unlabeled
-    #
-    # X_train_unl = np.concatenate(
-    #     [X_mem[:n_unl_mem], X_nonmem[2000 : 2000 + n_unl_nonmem]]
-    # )
-    #
-    # # true labels: members=0, nonmembers=1
-    # y_train_nonmem = np.ones(len(X_train_nonmem), dtype=int)
-    # y_train_unl = np.concatenate(
-    #     [np.zeros(n_unl_mem, dtype=int), np.ones(n_unl_nonmem, dtype=int)]
-    # )
-    #
-    # X_train = np.concatenate([X_train_nonmem, X_train_unl])
-    # y_train = np.concatenate([y_train_nonmem, y_train_unl])
-    #
-    # # NU observed labels: 1 = known negatives (N), 0 = unlabeled (U)
-    # s_train = np.concatenate(
-    #     [
-    #         np.ones(len(X_train_nonmem), dtype=int),  # N
-    #         np.zeros(len(X_train_unl), dtype=int),  # U
-    #     ]
-    # )
-
+    X_mem_generated =  X_mem_generated[np.random.permutation(len(X_mem_generated))]
+    X_nonmem_generated =  X_nonmem_generated[np.random.permutation(len(X_nonmem_generated))]
     # -----------------------------
     # Test set construction (unlabeled only)
     # -----------------------------
     # train_len = len(X_train)
-    X_test_nonmem = X_nonmem[:2000]
+    X_test_nonmem = np.concatenate(
+        [
+            X_mem_generated[:1000],
+            X_nonmem_generated[1000:2000],
+        ]
+    )
     n_test_unl = test_len - 2000
     n_pos_test = int(n_test_unl * p)  # members inside test unlabeled
     n_unl_test_nonmem = n_test_unl - n_pos_test  # non-members inside test unlabeled
@@ -115,7 +152,7 @@ def prepare_data(name, seed, p, test_len=4000):
 
     y_test_unl = np.concatenate(
         [
-            np.ones(2000, dtype=int), #NM_labeled
+            np.ones(2000, dtype=int), #NM_labeled (possibly generated in run_tymes synth)
             np.zeros(n_pos_test, dtype=int),  # Umembers
             np.ones(n_unl_test_nonmem, dtype=int),  # Unon-members
         ]
@@ -213,6 +250,7 @@ def experiment_lbe_with_prior(
     p=0.5,
     bins=10,
     device=1,
+    run_type="real",
 ):
     """
     Run the experiment with LBE using internal prior.
@@ -244,7 +282,7 @@ def experiment_lbe_with_prior(
     records = []
     for sym in np.arange(0, nsym, 1):
         X_test, y_test, s_test = prepare_data(
-            name=name, seed=sym, p=p
+            name=name, seed=sym, p=p, run_type=run_type
         )
         np.random.seed(sym)
         seed(sym)
@@ -431,8 +469,16 @@ def main():
         required=False,
         help="Device to use for LBE training (default: 1)",
     )
+    parser.add_argument(
+        "-run_type",
+        type=str,
+        default="real",
+        required=False,
+        choices=["real", "synth", "ae_synth"],
+        help="Type of run to perform: real (pattern1&2), synth (pattern1&2 and pattern5&6), ae_synth (pattern3&4 and pattern5&6) (default: real)",
+    )
     args = parser.parse_args()
-
+    print(args.run_type)
     experiment_lbe_with_prior(
         args.data,
         args.nsym,
@@ -442,6 +488,7 @@ def main():
         p=args.prob,
         bins=args.bins,
         device=args.device,
+        run_type=args.run_type,
     )
 
 
