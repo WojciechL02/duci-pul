@@ -127,6 +127,7 @@ class LBEWithPrior(BaseEstimator):
 
     def __init__(
         self,
+        kind="LR",
         bins=30,
         relax="auto",
         tail_trim=0.001,
@@ -135,19 +136,25 @@ class LBEWithPrior(BaseEstimator):
         proba_index=1,
         device=1,
     ):
+        self.kind = kind
         self.bins = bins
         self.relax = relax
         self.tail_trim = tail_trim
         self.min_bin_count_N = min_bin_count_N
         self.min_bin_count_U = min_bin_count_U
         self.proba_index = proba_index
-        self.device = f"cuda:{device}"
+        self.device = f"cuda:{device}" if torch.cuda.is_available() else "cpu"
         self.model = None
         self.pi = None  # estimated prevalence on the last fit() dataset
 
+        if kind not in ["MLP", "LR"]:
+            raise ValueError(
+                f"Classifier kind '{kind}' not supported. Use 'MLP' or 'LR'."
+            )
+
     def fit(self, X, s):
         # Train the scorer once (do NOT train on test when evaluating)
-        self.model = lbe_train(X, s, kind="LR", epochs=250, device=self.device)  # <- your function
+        self.model = lbe_train(X, s, kind=self.kind, epochs=250, device=self.device)
         # Estimate p on this dataset
         self.pi = self._estimate_p_from_X_and_s(X, s)
         return self

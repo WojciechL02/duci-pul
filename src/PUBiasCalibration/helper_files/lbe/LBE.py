@@ -58,8 +58,9 @@ class MLPPropensityEstimator(PropensityEstimator):
             # nn.Sigmoid(),
         )
 
-        for layer in [module for module in self.eta.modules()
-                        if isinstance(module, nn.Linear)]:
+        for layer in [
+            module for module in self.eta.modules() if isinstance(module, nn.Linear)
+        ]:
             # layer.weight = nn.Parameter(torch.randn_like(layer.weight) / 100)
             # layer.bias = nn.Parameter(torch.randn_like(layer.bias) / 100)
             layer.weight = nn.Parameter(torch.zeros_like(layer.weight))
@@ -80,8 +81,9 @@ class LogisticPropensityEstimator(PropensityEstimator):
             # nn.Sigmoid(),
         )
 
-        for layer in [module for module in self.eta.modules()
-                        if isinstance(module, nn.Linear)]:
+        for layer in [
+            module for module in self.eta.modules() if isinstance(module, nn.Linear)
+        ]:
             # layer.weight = nn.Parameter(torch.randn_like(layer.weight) / 100)
             # layer.bias = nn.Parameter(torch.randn_like(layer.bias) / 100)
             layer.weight = nn.Parameter(torch.zeros_like(layer.weight))
@@ -99,14 +101,18 @@ class LBE(nn.Module):
         super(LBE, self).__init__()
         # Determine device
         if device is None:
-            self.device = "mps" if getattr(torch, 'has_mps', False) else "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = (
+                "mps"
+                if getattr(torch, "has_mps", False)
+                else "cuda" if torch.cuda.is_available() else "cpu"
+            )
         else:
             self.device = device
 
         if kind == "MLP":
             self.h = MLPClassifier(input_dim, hidden_dim)
             self.eta = MLPPropensityEstimator(input_dim, hidden_dim)
-        elif kind == "LF":
+        elif kind == "LR":
             self.h = LogisticClassifier(input_dim)
             self.eta = LogisticPropensityEstimator(input_dim)
 
@@ -143,7 +149,9 @@ class LBE(nn.Module):
             P_y_hat_1 = torch.where(s == 1, eta, 1 - eta) * h
             P_y_hat_0 = torch.where(s == 1, 0, 1) * (1 - h)
 
-            P_y_hat = torch.cat([P_y_hat_0.reshape(-1, 1), P_y_hat_1.reshape(-1, 1)], axis = 1)
+            P_y_hat = torch.cat(
+                [P_y_hat_0.reshape(-1, 1), P_y_hat_1.reshape(-1, 1)], axis=1
+            )
             P_y_hat /= P_y_hat.sum(axis=1).reshape(-1, 1)
             return P_y_hat
 
@@ -168,8 +176,10 @@ class LBE(nn.Module):
         # )
         loss = torch.where(
             s == 1,
-            P_y_hat[:, 1] * (log_h + log_eta) + P_y_hat[:, 0] * (log_1_minus_h + log_eta),
-            P_y_hat[:, 1] * (log_h + log_1_minus_eta) + P_y_hat[:, 0] * (log_1_minus_h + log_1_minus_eta)
+            P_y_hat[:, 1] * (log_h + log_eta)
+            + P_y_hat[:, 0] * (log_1_minus_h + log_eta),
+            P_y_hat[:, 1] * (log_h + log_1_minus_eta)
+            + P_y_hat[:, 0] * (log_1_minus_h + log_1_minus_eta),
         )
 
         with torch.no_grad():
@@ -177,8 +187,23 @@ class LBE(nn.Module):
             x = torch.cat([x, x_ones], dim=1)
             sigma_h = torch.sigmoid(h)
             sigma_eta = torch.sigmoid(eta)
-            grad_theta_1 = ((P_y_hat[:, 0] * sigma_h).reshape(-1, 1) * x + (P_y_hat[:, 1] * (sigma_h - 1)).reshape(-1, 1) * x).sum(axis = 0)
-            grad_theta_2 = (((-1)**(s+1) * (1 * P_y_hat[:, 1] / torch.where(s == 1, sigma_eta, 1 - sigma_eta)) * sigma_eta * (sigma_eta - 1)).reshape(-1, 1) * x).sum(axis = 0)
+            grad_theta_1 = (
+                (P_y_hat[:, 0] * sigma_h).reshape(-1, 1) * x
+                + (P_y_hat[:, 1] * (sigma_h - 1)).reshape(-1, 1) * x
+            ).sum(axis=0)
+            grad_theta_2 = (
+                (
+                    (-1) ** (s + 1)
+                    * (
+                        1
+                        * P_y_hat[:, 1]
+                        / torch.where(s == 1, sigma_eta, 1 - sigma_eta)
+                    )
+                    * sigma_eta
+                    * (sigma_eta - 1)
+                ).reshape(-1, 1)
+                * x
+            ).sum(axis=0)
 
         return -torch.sum(loss), grad_theta_1, grad_theta_2
 
@@ -202,9 +227,10 @@ class LBE(nn.Module):
             optimizer.step()
 
             if print_msg:
-                print('Epoch {}: train loss: {}'.format(epoch, loss.item()))
+                print("Epoch {}: train loss: {}".format(epoch, loss.item()))
 
-def lbe_train(X, s, kind='LR', epochs=1000, device=None):
+
+def lbe_train(X, s, kind="LR", epochs=1000, device=None):
     """
     Train an LBE model with optional GPU acceleration.
 
@@ -221,7 +247,7 @@ def lbe_train(X, s, kind='LR', epochs=1000, device=None):
     start_time = time.time()
 
     p = X.shape[1]
-    lbe = LBE(p, kind="LF", device=device)
+    lbe = LBE(p, kind=kind, device=device)
 
     # Print device information
     print(f"Training LBE model on device: {lbe.device}")
@@ -250,13 +276,14 @@ def lbe_train(X, s, kind='LR', epochs=1000, device=None):
             loss.backward()
             optimizer.step()
 
-        #print('Epoch {}: train loss: {}'
+        # print('Epoch {}: train loss: {}'
         #    .format(epoch, loss.item()))
 
     end_time = time.time()
     print(f"LBE training completed in {end_time - start_time:.2f} seconds")
 
     return lbe
+
 
 def lbe_predict_proba(lbe, Xtest):
     """

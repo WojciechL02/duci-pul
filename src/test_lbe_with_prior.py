@@ -208,7 +208,14 @@ def estimate_p_test_from_trainN(
 
 
 def experiment_lbe_with_prior(
-    name, nsym, unl_mem_ratio=0.5, results_dir="../results", p=0.5, bins=10, device=1
+    name,
+    nsym,
+    lbe_model,
+    unl_mem_ratio=0.5,
+    results_dir="../results",
+    p=0.5,
+    bins=10,
+    device=1,
 ):
     """
     Run the experiment with LBE using internal prior.
@@ -256,7 +263,7 @@ def experiment_lbe_with_prior(
 
         start_time = time.time()
         # Use the LBEWithPrior model
-        model = LBEWithPrior(bins=bins, device=device)
+        model = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
         model.fit(X_train, s_train)
         end_time = time.time()
         run_time = end_time - start_time
@@ -393,21 +400,25 @@ def experiment_lbe_with_prior(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-data",
-        type=str,
-        default="var_24",
-        required=False,
-        help="Model to use. Available options: "
-        "var_16, var_20, var_24 (default), var_30, "
-        "rar_b, rar_l, rar_xl, rar_xxl, "
-        "mar_b, mar_l, mar_h",
-    )
-    parser.add_argument(
         "-nsym", type=int, required=True, help="Number of iterations/runs"
     )
     # parser.add_argument(
     #     "-prob", type=float, required=True, help="Probability value (between 0 and 1)"
     # )
+    parser.add_argument(
+        "-lbe_model",
+        type=str,
+        default="LR",
+        required=False,
+        choices=["LR", "MLP"],
+        help="LBE backbone model to use: LR (Logistic Regression, default) or MLP (Multi-layer Perceptron)",
+    )
+    parser.add_argument(
+        "-data",
+        type=str,
+        required=True,
+        help="Model to use. E.g.: var_24",
+    )
     parser.add_argument(
         "-unl_mem_ratio",
         type=float,
@@ -439,7 +450,13 @@ def main():
     args = parser.parse_args()
 
     experiment_lbe_with_prior(
-        args.data, args.nsym, args.unl_mem_ratio, args.results, bins=args.bins, device=args.device
+        args.data,
+        args.nsym,
+        args.lbe_model,
+        args.unl_mem_ratio,
+        args.results,
+        bins=args.bins,
+        device=args.device,
     )
 
 
