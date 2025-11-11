@@ -109,8 +109,8 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         print(f"Run type: {run_type} - Using patterns 1 & 2 (real)")
     elif run_type == "synth" or run_type == "correction":
         # For synth: Use pattern1 & pattern2 and pattern5 & pattern6 (files containing _real_*mem, _real_*nonmem, _from-mem, and _from-nonmem)
-        mem_matches = mem_matches1 + mem_matches3
-        nonmem_matches = nonmem_matches1 + nonmem_matches3
+        mem_matches = mem_matches2 + mem_matches3
+        nonmem_matches = nonmem_matches2 + nonmem_matches3
         print(f"Run type: {run_type} - Using patterns 1, 2, 5 & 6 (real and from-mem)")
     elif run_type == "ae_synth":
         # For ae_synth: Use pattern3 & pattern4 and pattern5 & pattern6 (files containing _ae_mem, _ae_nonmem, _from-mem, and _from-nonmem)
