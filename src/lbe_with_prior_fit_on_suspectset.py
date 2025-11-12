@@ -1,13 +1,12 @@
 import argparse
-import numpy as np
-import numpy as np
 import os
-import pandas as pd
 import time
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 from sklearn.linear_model import LinearRegression  # residualization
 from sklearn.metrics import accuracy_score, balanced_accuracy_score
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import MinMaxScaler
 
 from PUBiasCalibration.Models.LBEWithPrior import (
@@ -15,7 +14,6 @@ from PUBiasCalibration.Models.LBEWithPrior import (
     seed,
     _lbe_nu_estimate_p_robust,
 )
-from PUBiasCalibration.helper_files import choose_threshold_nu, debias_target, estimate_p_and_debias
 
 
 def load_features(npz_path):
@@ -161,9 +159,6 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     X_nonmem_generated = nonmembers_generated["data"]
 
     if run_type =="correction":
-        # For synth: Use pattern1 & pattern2 and pattern5 & pattern6 (files containing _real_*mem, _real_*nonmem, _from-mem, and _from-nonmem)
-        ctrl_mem_matches = mem_matches4 + mem_matches5
-        ctrl_nonmem_matches = nonmem_matches4 + nonmem_matches5
 
         X_ctrl_ae_mem = load_features(mem_matches4[0])
         X_ctrl_ae_nonmem = load_features(nonmem_matches4[0])
@@ -254,8 +249,10 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         )
         # scale
         X_ctrl_test = X_ctrl_test.squeeze(1)
+        ols = LinearRegression().fit(X_ctrl_test, X_test)
+        Xhat_test = ols.predict(X_ctrl_test) # take only ctrl features explaining MIA
         scaler = MinMaxScaler()
-        X_ctrl_test = scaler.fit_transform(X_ctrl_test)
+        X_ctrl_test = scaler.fit_transform(Xhat_test)
 
     return X_test, y_test, s_test, (X_ctrl_test if run_type == "correction" else None)
 
@@ -355,8 +352,9 @@ def experiment_lbe_with_prior(
         "acc",
         "bacc",
         "p_hat_test",
-        "p_hat_through_scores_and_debiased"
     ]
+    if run_type == "correction":
+        metrics += ["p_hat_ctrl", "p_hat_comb", 'p_hat_2MIA-comb', 'p_hat_MIA-ctrl']
 
     print("\n Method: LBE with internal prior")
     records = []
@@ -393,68 +391,14 @@ def experiment_lbe_with_prior(
             internal_pi_ctrl = mdl_ctrl.get_prior()
             internal_pi_comb = mdl_comb.get_prior()
 
-            # ---------- residualization (in logit space) ----------
-            # Get member-like probs from both scorers
-            p_ctrl_test = mdl_ctrl.predict_proba(X_ctrl_test)[:, 1]
-            p_comb_test = mdl_comb.predict_proba(X_comb_test)[:, 1]
+        prob_y_test = model.predict_proba(X_test)[:, 1]
 
-            # logit + OLS: comb ~ ctrl  (remove control-explained component)
-            l_ctrl_test = safe_logit(p_ctrl_test)
-            l_comb_test = safe_logit(p_comb_test)
+        # Flip labels
+        prob_y_test = 1 - prob_y_test
+        y_test = 1 - y_test
 
-            ols = LinearRegression().fit(l_ctrl_test.reshape(-1, 1), l_comb_test)
-
-            l_comb_pred_test = ols.predict(l_ctrl_test.reshape(-1, 1))
-
-            l_resid_test = l_comb_test - l_comb_pred_test
-
-            prob_test_corrected = np.clip(sigmoid(l_resid_test), 0.0, 1.0)
-
-            # Orientation: metrics expect "non-member = 1"
-            prob_test_nm = 1.0 - prob_test_corrected
-            y_test_eval = 1 - y_test
-
-            # For internal-prior thresholding, we need neg_scores in the SAME space:
-            neg_scores_nm = prob_test_nm[s_test == 1]  # known negatives (non-members)
-
-            # Threshold via internal prior (Script1/2-style)
-            best = choose_threshold_nu(prob_test_nm, neg_scores_nm, internal_pi_comb)
-
-            # Debias TEST using TRAIN-derived TPR/FPR at that threshold
-            debias_result = debias_target(prob_test_nm, best["thr"], best["TPR"], best["FPR"])
-
-            # Standard PU estimate for reporting (not used for main estimate)
-            standard_result = estimate_p_and_debias(prob_test_nm, neg_scores_nm)
-
-            # Compute p_hat_test (Script1/2-style) using raw mdl_comb distributions
-            p_hat_test = estimate_p_test(
-                lbe_model=mdl_comb,
-                X_test=X_comb_test[2000:],
-                s_test=s_test[2000:],
-                X_train=X_comb_test[:2000],
-                s_train=s_test[:2000],
-            )
-
-            # Classification metrics using 0.5 over non-member prob
-            acc = accuracy_score(y_test_eval, (prob_test_nm > 0.5).astype(int))
-            bacc = balanced_accuracy_score(y_test_eval, (prob_test_nm > 0.5).astype(int))
-        else:
-            p_hat_test = estimate_p_test(
-                lbe_model=model,
-                X_test=X_test[2000:],
-                s_test=s_test[2000:],
-                X_train=X_test[:2000], # for known NM or generated
-                s_train=s_test[:2000], # for known NM or generated
-            )
-
-            prob_y_test = model.predict_proba(X_test)[:, 1]
-
-            # Flip labels
-            prob_y_test = 1 - prob_y_test
-            y_test = 1 - y_test
-
-            acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+        acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+        bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
 
         results = {
             "method": "lbe_with_internal_prior",
@@ -462,7 +406,6 @@ def experiment_lbe_with_prior(
             "bacc": bacc,
             "time": run_time,
             "p_hat_test": internal_pi,
-            "p_hat_through_scores_and_debiased": p_hat_test,
         }
 
         if run_type == "correction" and X_ctrl_test is not None:
@@ -470,52 +413,10 @@ def experiment_lbe_with_prior(
                 {
                     "p_hat_ctrl": internal_pi_ctrl,
                     "p_hat_comb": internal_pi_comb,
-                    "p_hat_comb_corrected_debias": debias_result["p_hat"],
-                    "p_hat_comb_corrected_standard": standard_result["p_hat"],
-                    "pi_hat_comb_standard": standard_result["pi_hat"],
+                    'p_hat_2MIA-comb': 2*internal_pi-internal_pi_comb,
+                    'p_hat_MIA-ctrl':internal_pi - internal_pi_ctrl,
                 }
             )
-        # # Get negative samples (labeled negatives from X_train)
-        # X_train_neg = X_train[s_train == 1]
-        #
-        # # Get scores for negative samples
-        # neg_scores = model.predict_proba(X_train_neg)[:, 1]
-        #
-        # # Flip scores to match the flipped labels
-        # neg_scores = 1 - neg_scores
-        #
-        # # First, find the optimal threshold using the internal prior
-        # from PUBiasCalibration.helper_files.pu_metrics import choose_threshold_nu
-        #
-        # best = choose_threshold_nu(prob_y_test, neg_scores, internal_pi)
-        #
-        # # Perform debiasing with the internal prior
-        # debias_result = debias_target(
-        #     prob_y_test, best["thr"], best["TPR"], best["FPR"]
-        # )
-
-        # Also run the standard estimation for comparison
-        # standard_result = estimate_p_and_debias(prob_y_test, neg_scores)
-
-        # Add method, run, and results to the results dictionary
-        # results.update(
-        #     {
-        #         "method": "lbe_with_internal_prior",
-        #         "run": sym + 1,
-        #         "p_hat_test": p_hat_test,  # LBE p - test
-        #         "p_hat": debias_result["p_hat"],
-        #         "pi_hat": internal_pi,  # Use internal prior as pi_hat - train
-        #         "ci_low": debias_result["ci_low"],
-        #         "ci_high": debias_result["ci_high"],
-        #         "threshold": debias_result["threshold"],
-        #         "TPR": debias_result["TPR"],
-        #         "FPR": debias_result["FPR"],
-        #         "J": debias_result["J"],
-        #         "standard_p_hat": standard_result["p_hat"],
-        #         "standard_pi_hat": standard_result["pi_hat"],
-        #         "lowerbound": standard_result["lowerbound"],
-        #     }
-        # )
 
         print(results)
         records.append(results)
@@ -556,17 +457,21 @@ def experiment_lbe_with_prior(
     print(f"\nTrue p: {p:.4f}")
     if run_type == "correction":
         print(
-            f"Mean estimated ratio (p_hat_comb_corrected_debias): {df['p_hat_comb_corrected_debias'].mean():.4f} ± {df['p_hat_comb_corrected_debias'].std():.4f}"
+            f"Mean estimated ratio (p_hat_comb): {df['p_hat_comb'].mean():.4f} ± {df['p_hat_comb'].std():.4f}"
         )
         print(
-            f"Mean estimated ratio (p_hat_comb_corrected_standard): {df['p_hat_comb_corrected_standard'].mean():.4f} ± {df['p_hat_comb_corrected_standard'].std():.4f}"
+            f"Mean estimated ratio (p_hat_ctrl): {df['p_hat_ctrl'].mean():.4f} ± {df['p_hat_ctrl'].std():.4f}"
+        )
+        print(
+            f"Mean estimated ratio (p_hat_2MIA-comb): {df['p_hat_2MIA-comb'].mean():.4f} ± {df['p_hat_2MIA-comb'].std():.4f}"
+        )
+        print(
+            f"Mean estimated ratio (p_hat_MIA-ctrl): {df['p_hat_MIA-ctrl'].mean():.4f} ± {df['p_hat_MIA-ctrl'].std():.4f}"
         )
     print(
         f"Mean estimated ratio (p_hat_test): {df['p_hat_test'].mean():.4f} ± {df['p_hat_test'].std():.4f}"
     )
-    print(
-        f"Mean estimated ratio (p_hat_through_scores_and_debiased): {df['p_hat_through_scores_and_debiased'].mean():.4f} ± {df['p_hat_through_scores_and_debiased'].std():.4f}"
-    )
+
 
 
 def main():

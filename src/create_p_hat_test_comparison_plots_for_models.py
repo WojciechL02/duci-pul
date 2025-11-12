@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 import argparse
-import matplotlib.pyplot as plt
-import numpy as np
 import os
-import pandas as pd
 import re
 from collections import defaultdict
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Create p_hat_test comparison plots for different models and methods.')
@@ -97,16 +98,19 @@ def create_plots_for_model(model_dir, output_suffix="", bins=None):
         'corrected': 'purple'
     }
 
+    # Dictionary to store MAE values for each model and run type
+    mae_data = {}
+
     # Process each model
     for i, (model_name, files) in enumerate(sorted(model_files.items())):
         ax = axes[i]
 
         # Dictionary to store metric data across p values for each run type
         metric_data = {
-            'real': {'p_values': [], 'metric_values': []},
-            'ae_synth': {'p_values': [], 'metric_values': []},
-            'synth': {'p_values': [], 'metric_values': []},
-            'correction': {'p_values': [], 'metric_values': []}
+            'real': {'p_values': [], 'metric_values': [], 'mae': None},
+            'ae_synth': {'p_values': [], 'metric_values': [], 'mae': None},
+            'synth': {'p_values': [], 'metric_values': [], 'mae': None},
+            'correction': {'p_values': [], 'metric_values': [], 'mae': None}
         }
 
         print(f"\nProcessing model: {model_name} with {len(files)} files")
@@ -122,20 +126,21 @@ def create_plots_for_model(model_dir, output_suffix="", bins=None):
                 print(f"  Reading file from: {file_path}")
                 df = pd.read_csv(file_path, delimiter='\t')
 
-                if run_type == "real":
-                    # For real, use p_hat_test
+                if run_type != "correction":
+                    # use p_hat_test
                     if "p_hat_test_mean_std" in df.columns:
                         p_hat_test_value = extract_mean(df["p_hat_test_mean_std"].iloc[0])
-                        metric_data['real']['p_values'].append(p_value)
-                        metric_data['real']['metric_values'].append(p_hat_test_value)
-                        print(f"    Extracted p_hat_test value: {p_hat_test_value} for p={p_value} (real)")
-                else:
-                    # For ae_synth, synth, corrected, use p_hat_test_through_scores_and_debised
-                    if "p_hat_through_scores_and_debiased_mean_std" in df.columns:
-                        p_hat_through_scores_value = extract_mean(df["p_hat_through_scores_and_debiased_mean_std"].iloc[0])
                         metric_data[run_type]['p_values'].append(p_value)
-                        metric_data[run_type]['metric_values'].append(p_hat_through_scores_value)
-                        print(f"    Extracted p_hat_through_scores_and_debiased value: {p_hat_through_scores_value} for p={p_value} ({run_type})")
+                        metric_data[run_type]['metric_values'].append(p_hat_test_value)
+                        print(f"Extracted p_hat_test value: {p_hat_test_value} for p={p_value} ({run_type})")
+
+                else:
+                    # use p_hat_2MIA-comb
+                    if "p_hat_2MIA-comb_mean_std" in df.columns:
+                        p_hat_2MIA_minus_comb_value = extract_mean(df["p_hat_2MIA-comb_mean_std_mean_std"].iloc[0])
+                        metric_data[run_type]['p_values'].append(p_value)
+                        metric_data[run_type]['metric_values'].append(p_hat_2MIA_minus_comb_value)
+                        print(f"Extracted p_hat_2MIA-comb value: {p_hat_2MIA_minus_comb_value} for p={p_value} ({run_type})")
             except Exception as e:
                 print(f"  Error processing {file}: {e}")
 
@@ -146,6 +151,17 @@ def create_plots_for_model(model_dir, output_suffix="", bins=None):
                 p_values = np.array(data['p_values'])
                 metric_values = np.array(data['metric_values'])
                 sort_idx = np.argsort(p_values)
+
+                # Calculate MAE (Mean Absolute Error)
+                mae = np.mean(np.abs(metric_values - p_values))
+                data['mae'] = mae
+
+                # Store MAE in the global mae_data dictionary
+                if model_name not in mae_data:
+                    mae_data[model_name] = {}
+                mae_data[model_name][run_type] = mae
+
+                print(f"    Calculated MAE for {run_type}: {mae:.4f}")
 
                 ax.plot(p_values[sort_idx], metric_values[sort_idx], marker='o', 
                        label=run_type, color=colors.get(run_type, 'gray'), linewidth=2)
@@ -168,17 +184,93 @@ def create_plots_for_model(model_dir, output_suffix="", bins=None):
         ax.minorticks_on()
         ax.grid(which='minor', linestyle=':', alpha=0.4)
 
-    # Set common x-label for the entire figure
-    fig.text(0.5, 0.01, 'True p value', ha='center', fontsize=16, fontweight='bold')
+    # Create a table with MAE values for each run type and model
+    run_types = ['real', 'synth', 'ae_synth', 'correction']
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.98])
+    # Print MAE values to console output
+    if mae_data:
+        print("\n" + "="*60)
+        print("Mean Absolute Error (MAE) for each model and run type:")
+        print("="*60)
+
+        # Get all model names
+        model_names = sorted(mae_data.keys())
+
+        # Print header
+        header = f"{'Run Type':<15}"
+        for model_name in model_names:
+            header += f"{model_name:>12}"
+        print(header)
+        print("-"*60)
+
+        # Print data rows for each run type
+        for run_type in run_types:
+            row = f"{run_type:<15}"
+            for model_name in model_names:
+                if model_name in mae_data and run_type in mae_data[model_name]:
+                    row += f"{mae_data[model_name][run_type]:>12.4f}"
+                else:
+                    row += f"{'N/A':>12}"
+            print(row)
+        print("="*60 + "\n")
+
+    # Create a table at the bottom of the figure
+    if mae_data:
+        # Create a new axis for the table
+        table_height = 0.15  # Adjust as needed
+        table_ax = fig.add_axes([0.15, 0.02, 0.7, table_height])
+        table_ax.axis('off')
+
+        # Get all model names
+        model_names = sorted(mae_data.keys())
+
+        # Prepare table data with run types as rows and models as columns
+        table_data = []
+        for run_type in run_types:
+            row = [run_type]
+            for model_name in model_names:
+                if model_name in mae_data and run_type in mae_data[model_name]:
+                    row.append(f"{mae_data[model_name][run_type]:.4f}")
+                else:
+                    row.append("N/A")
+            table_data.append(row)
+
+        # Create the table
+        table = table_ax.table(
+            cellText=table_data,
+            colLabels=['Run Type'] + model_names,
+            loc='center',
+            cellLoc='center',
+            colColours=['lightgray'] * (len(model_names) + 1),
+            colWidths=[0.3] + [0.2] * len(model_names)
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 1.5)
+
+        # Add a title for the table
+        table_ax.set_title('Mean Absolute Error (MAE)', fontsize=14, fontweight='bold', pad=20)
+
+        # Adjust layout to make room for the table
+        plt.subplots_adjust(bottom=table_height + 0.1)
+
+    # Set common x-label for the entire figure
+    if mae_data:
+        # Position the x-label above the table
+        fig.text(0.5, table_height + 0.05, 'True p value', ha='center', fontsize=16, fontweight='bold')
+    else:
+        fig.text(0.5, 0.01, 'True p value', ha='center', fontsize=16, fontweight='bold')
+
+    plt.tight_layout(rect=[0, table_height + 0.1 if mae_data else 0.03, 1, 0.98])
     plt.subplots_adjust(hspace=0.3)
 
     # Add a title for the entire figure
     model_type = "Linear Regression" if "LR" in model_dir else "MLP"
     bin_info = f" ({bins} bins)" if bins else ""
     title = f'Comparison of real, synth, ae_synth, corrected for {model_type}{bin_info} Models'
-    fig.suptitle(title, fontsize=20, fontweight='bold', y=0.99)
+    # Adjust title position if table exists
+    title_y = 0.99 if not mae_data else 0.995
+    fig.suptitle(title, fontsize=20, fontweight='bold', y=title_y)
 
     # Save the figure
     suffix = f"_{output_suffix}" if output_suffix else ""
