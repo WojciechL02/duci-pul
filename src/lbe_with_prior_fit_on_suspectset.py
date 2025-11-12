@@ -38,7 +38,7 @@ def safe_logit(p):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-def prepare_data(name, seed, p, test_len=4000, run_type="real"):
+def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     """
     Prepare data for the experiment.
 
@@ -183,15 +183,14 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
     # -----------------------------
     # Test set construction (unlabeled only)
     # -----------------------------
-    n_test_unl = test_len - 2000
-    n_pos_test = int(n_test_unl * p)  # members inside test unlabeled
-    n_unl_test_nonmem = n_test_unl - n_pos_test  # non-members inside test unlabeled
+    n_pos_test = int(ss_len * p)  # members inside suspect set
+    n_unl_test_nonmem = ss_len - n_pos_test  # non-members inside test unlabeled
 
     if run_type == "real":
         X_test_nonmem = np.concatenate(
             [
-                X_mem_generated[:1000],
-                X_nonmem_generated[1000:2000],
+                X_mem_generated[:int(ss_len/2)],
+                X_nonmem_generated[int(ss_len/2):ss_len],
             ]
         )
     else:
@@ -199,7 +198,7 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         X_test_nonmem = np.concatenate(
             [
                 X_mem_generated[:n_pos_test],
-                X_nonmem_generated[2000:2000 + n_unl_test_nonmem],
+                X_nonmem_generated[ss_len:ss_len + n_unl_test_nonmem],
             ]
         )
 
@@ -207,13 +206,13 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         [
             X_test_nonmem,
             X_mem[:n_pos_test],
-            X_nonmem[2000:2000+n_unl_test_nonmem],
+            X_nonmem[ss_len:ss_len+n_unl_test_nonmem],
         ]
     )
 
     y_test = np.concatenate(
         [
-            np.ones(2000, dtype=int), #NM_labeled (possibly generated in run_tymes synth)
+            np.ones(ss_len, dtype=int), #NM_labeled (possibly generated in run_tymes synth)
             np.zeros(n_pos_test, dtype=int),  # Umembers
             np.ones(n_unl_test_nonmem, dtype=int),  # Unon-members
         ]
@@ -221,7 +220,7 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
 
     s_test = np.concatenate(
         [
-            np.ones(2000, dtype=int), #NM_labeled
+            np.ones(ss_len, dtype=int), #NM_labeled
             np.zeros(n_pos_test, dtype=int),  # Umembers
             np.zeros(n_unl_test_nonmem, dtype=int),  # Unon-members
         ]
@@ -236,7 +235,7 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
         X_ctrl_test_nonmem = np.concatenate(
             [
                 X_ctrl_mem_generated[:n_pos_test],
-                X_ctrl_nonmem_generated[2000:2000 + n_unl_test_nonmem],
+                X_ctrl_nonmem_generated[ss_len:ss_len + n_unl_test_nonmem],
             ]
         )
 
@@ -244,7 +243,7 @@ def prepare_data(name, seed, p, test_len=4000, run_type="real"):
             [
                 X_ctrl_test_nonmem,
                 X_ctrl_ae_mem[:n_pos_test],
-                X_ctrl_ae_nonmem[2000:2000 + n_unl_test_nonmem],
+                X_ctrl_ae_nonmem[ss_len:ss_len + n_unl_test_nonmem],
             ]
         )
         # scale
@@ -319,16 +318,8 @@ def estimate_p_test(
     return p_hat_test
 
 
-def experiment_lbe_with_prior(
-    name,
-    nsym,
-    lbe_model,
-    results_dir="../results",
-    p=0.5,
-    bins=10,
-    device=1,
-    run_type="real",
-):
+def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p=0.5, bins=10, device=1,
+                              run_type="real", ss_len=2000):
     """
     Run the experiment with LBE using internal prior.
 
@@ -360,7 +351,7 @@ def experiment_lbe_with_prior(
     records = []
     for sym in np.arange(0, nsym, 1):
         X_test, y_test, s_test, X_ctrl_test = prepare_data(
-            name=name, seed=sym, p=p, run_type=run_type
+            name=name, seed=sym, p=p, run_type=run_type, ss_len=ss_len,
         )
         np.random.seed(sym)
         seed(sym)
@@ -443,12 +434,12 @@ def experiment_lbe_with_prior(
 
     model_name = name.split("/")[1] if "/" in name else name
     formatted.to_csv(
-        f"{results_dir}/results_lbe_prior_{model_name}_{run_type}_p={p}.csv",
+        f"{results_dir}/results_lbe_prior_{model_name}_{run_type}_len{ss_len}_bins{bins}_lbe{lbe_model}_p={p}.csv",
         index=False,
         sep="\t",
     )
     df.to_csv(
-        f"{results_dir}/results_lbe_prior_full_{model_name}_{run_type}_p={p}.csv",
+        f"{results_dir}/results_lbe_prior_full_{model_name}_{run_type}_len{ss_len}_bins{bins}_lbe{lbe_model}_p={p}.csv",
         index=False,
         sep="\t",
     )
@@ -497,13 +488,6 @@ def main():
         help="Model to use. E.g.: var_24",
     )
     parser.add_argument(
-        "-unl_mem_ratio",
-        type=float,
-        default=0.5,
-        required=False,
-        help="Unlabeled members ratio (between 0 and 1, where 1.0 = 2000 members, default: 0.5)",
-    )
-    parser.add_argument(
         "-results",
         type=str,
         default="../results",
@@ -516,6 +500,13 @@ def main():
         default=10,
         required=False,
         help="Number of bins for the LBE model (default: 10)",
+    )
+    parser.add_argument(
+        "-ss_len",
+        type=int,
+        default=2000,
+        required=False,
+        help="Number samples in the suspect set (default: 2000)",
     )
     parser.add_argument(
         "-device",
@@ -538,8 +529,8 @@ def main():
         args.data,
         args.nsym,
         args.lbe_model,
-        # args.unl_mem_ratio,
         args.results,
+        ss_len = args.ss_len,
         p=args.prob,
         bins=args.bins,
         device=args.device,
