@@ -137,7 +137,7 @@ def create_plots_for_model(model_dir, output_suffix="", bins=None):
                 else:
                     # use p_hat_2MIA-comb
                     if "p_hat_2MIA-comb_mean_std" in df.columns:
-                        p_hat_2MIA_minus_comb_value = extract_mean(df["p_hat_2MIA-comb_mean_std_mean_std"].iloc[0])
+                        p_hat_2MIA_minus_comb_value = extract_mean(df["p_hat_2MIA-comb_mean_std"].iloc[0])
                         metric_data[run_type]['p_values'].append(p_value)
                         metric_data[run_type]['metric_values'].append(p_hat_2MIA_minus_comb_value)
                         print(f"Extracted p_hat_2MIA-comb value: {p_hat_2MIA_minus_comb_value} for p={p_value} ({run_type})")
