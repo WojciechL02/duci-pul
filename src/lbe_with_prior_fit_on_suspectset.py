@@ -101,7 +101,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     nonmem_matches5 = list(folder.glob(nonmem_pattern5))
 
     # Select patterns based on run_type
-    if run_type == "real" or "mean_mia_score" or "tail":
+    if run_type == "real":
         # For real: Use pattern1 & pattern2 (files containing _real_*mem and _real_*nonmem)
         mem_matches = mem_matches1
         nonmem_matches = nonmem_matches1
@@ -111,7 +111,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
         mem_matches = mem_matches1 + mem_matches3
         nonmem_matches = nonmem_matches1 + nonmem_matches3
         print(f"Run type: {run_type} - Using patterns 1, 2, 5 & 6 (real and from-mem)")
-    elif run_type == "ae_synth" or run_type == "correction":
+    elif run_type in ("ae_synth", "correction"):
         # For ae_synth: Use pattern3 & pattern4 and pattern5 & pattern6 (files containing _ae_mem, _ae_nonmem, _from-mem, and _from-nonmem)
         mem_matches = mem_matches2 + mem_matches3
         nonmem_matches = nonmem_matches2 + nonmem_matches3
@@ -128,7 +128,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     if len(mem_matches) > 1:
         mem_file_generated = mem_matches[1]
         nonmem_file_generated = nonmem_matches[1]
-    elif run_type == "real" or "mean_mia_score" or "tail":
+    elif run_type == "real":
         mem_file_generated = nonmem_matches[0] #in real we mix only real nonmembers.
         nonmem_file_generated = nonmem_matches[0]
     else:
@@ -187,7 +187,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     n_pos_test = int(ss_len * p)  # members inside suspect set
     n_unl_test_nonmem = ss_len - n_pos_test  # non-members inside test unlabeled
 
-    if run_type == "real" or "mean_mia_score" or "tail":
+    if run_type == "real":
         X_test_nonmem = np.concatenate(
             [
                 X_mem_generated[:int(ss_len/2)],
