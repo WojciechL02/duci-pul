@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.stats import binom, beta
 from sklearn.linear_model import LinearRegression  # residualization
 from sklearn.metrics import accuracy_score, balanced_accuracy_score
 from sklearn.preprocessing import MinMaxScaler
@@ -100,7 +101,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     nonmem_matches5 = list(folder.glob(nonmem_pattern5))
 
     # Select patterns based on run_type
-    if run_type == "real":
+    if run_type == "real" or "mean_mia_score" or "tail":
         # For real: Use pattern1 & pattern2 (files containing _real_*mem and _real_*nonmem)
         mem_matches = mem_matches1
         nonmem_matches = nonmem_matches1
@@ -127,7 +128,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     if len(mem_matches) > 1:
         mem_file_generated = mem_matches[1]
         nonmem_file_generated = nonmem_matches[1]
-    elif run_type == "real":
+    elif run_type == "real" or "mean_mia_score" or "tail":
         mem_file_generated = nonmem_matches[0] #in real we mix only real nonmembers.
         nonmem_file_generated = nonmem_matches[0]
     else:
@@ -186,7 +187,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     n_pos_test = int(ss_len * p)  # members inside suspect set
     n_unl_test_nonmem = ss_len - n_pos_test  # non-members inside test unlabeled
 
-    if run_type == "real":
+    if run_type == "real" or "mean_mia_score" or "tail":
         X_test_nonmem = np.concatenate(
             [
                 X_mem_generated[:int(ss_len/2)],
@@ -343,6 +344,7 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
         "acc",
         "bacc",
         "p_hat_test",
+        "H0_p_value",
     ]
     if run_type == "correction":
         metrics += ["p_hat_ctrl", "p_hat_comb", 'p_hat_2MIA-comb', 'p_hat_MIA-ctrl']
@@ -355,49 +357,164 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
         )
         np.random.seed(sym)
         seed(sym)
-        # Use the LBEWithPrior model
-        start_time = time.time()
-        model = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
-        model.fit(X_test, s_test)
-        end_time = time.time()
-        run_time = end_time - start_time
-
-        internal_pi = model.get_prior()
-
-        if run_type == "correction" and X_ctrl_test is not None:
-            X_comb_test = np.hstack([X_ctrl_test, X_test])
-
-            # Fit LBEWithPrior on CONTROL-only and COMBINED
+        if run_type == "mean_mia_score":
+            sums = X_test.sum(axis=1)  # sum of features per example → shape (100,)
+            print(X_test.shape, len(sums))
+            print(X_test[0])
+            # Min-max scale to [0, 1]
+            scaled_sums = (sums - sums.min()) / (sums.max() - sums.min())
+            pi = np.sum([1 if ss > 0.5 else 0 for ss in scaled_sums]) / len(sums)
+            results = {
+                "method": "mean_of_sum_of_scores",
+                "acc": None,
+                "bacc": None,
+                "p_hat_test": pi,
+            }
+        else:
+            # Use the LBEWithPrior model
             start_time = time.time()
-            mdl_ctrl = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
-            mdl_ctrl.fit(X_ctrl_test, s_test)
-
-            mdl_comb = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
-            mdl_comb.fit(X_comb_test, s_test)
+            model = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+            model.fit(X_test, s_test)
             end_time = time.time()
             run_time = end_time - start_time
 
-            mdl_comb._fit_runtime = run_time  # stash for logging
+            internal_pi = model.get_prior()
 
-            internal_pi_ctrl = mdl_ctrl.get_prior()
-            internal_pi_comb = mdl_comb.get_prior()
+            if run_type == "correction" and X_ctrl_test is not None:
+                X_comb_test = np.hstack([X_ctrl_test, X_test])
 
-        prob_y_test = model.predict_proba(X_test)[:, 1]
+                # Fit LBEWithPrior on CONTROL-only and COMBINED
+                start_time = time.time()
+                mdl_ctrl = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+                mdl_ctrl.fit(X_ctrl_test, s_test)
 
-        # Flip labels
-        prob_y_test = 1 - prob_y_test
-        y_test = 1 - y_test
+                mdl_comb = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+                mdl_comb.fit(X_comb_test, s_test)
+                end_time = time.time()
+                run_time = end_time - start_time
 
-        acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-        bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+                mdl_comb._fit_runtime = run_time  # stash for logging
 
-        results = {
-            "method": "lbe_with_internal_prior",
-            "acc": acc,
-            "bacc": bacc,
-            "time": run_time,
-            "p_hat_test": internal_pi,
-        }
+                internal_pi_ctrl = mdl_ctrl.get_prior()
+                internal_pi_comb = mdl_comb.get_prior()
+
+            prob_y_test = model.predict_proba(X_test)[:, 1]
+
+            def pick_tau_by_target_fpr(scores_neg, alpha):
+                # tau is the (1-alpha) quantile so that FPR ~= alpha on negatives
+                q = 1.0 - alpha
+                return float(np.quantile(scores_neg, q, method="linear"))
+
+            def no_positives_test(scores_S, scores_N, *, alpha_grid=(1e-3, 2e-3, 5e-3, 1e-2),
+                                  combine="bonferroni", delta=0.05):
+                """
+                One-sided H0: p=0 test + conservative upper bound on p (no TPR needed).
+                - Scans several target FPRs (alpha_grid), guards small-sample noise.
+                - combine: 'bonferroni' or 'min' for multiple-threshold control.
+                - delta: confidence level for the (1-delta) upper bound on p.
+                Returns:
+                  dict with p_value (global), decision, best_tau, alpha_at_tau, k_obs,
+                  p_upper (conservative (1-delta) upper confidence bound on mixture proportion p).
+                """
+                scores_S = np.asarray(scores_S, float)
+                scores_N = np.asarray(scores_N, float)
+                nS = scores_S.size
+                if nS == 0:
+                    raise ValueError("scores_S is empty.")
+                if scores_N.size == 0:
+                    raise ValueError("scores_N is empty.")
+
+                per_tau = []
+                for a in alpha_grid:
+                    # skip alphas too small for the size of N (avoid zero/unstable tails)
+                    min_fpr = 1.0 / max(10, scores_N.size)
+                    a_eff = max(a, min_fpr)
+                    tau = pick_tau_by_target_fpr(scores_N, a_eff)
+                    k = int(np.sum(scores_S >= tau))
+                    rS = k / nS
+
+                    # p-value for H0: K ~ Bin(nS, a_eff), test is Pr(K >= k)
+                    pval = binom.sf(k - 1, nS, a_eff)
+
+                    # Conservative (1-delta) upper bound on rS via Clopper–Pearson,
+                    # then translate to upper bound on p with worst-case TPR=1:
+                    # p <= (r_upper - alpha)/(1 - alpha), clipped to [0,1].
+                    # CP upper bound on r given k successes in nS trials:
+                    r_upper = beta.ppf(1 - delta, k + 1, nS - k) if k < nS else 1.0
+                    p_upper = max(0.0, min(1.0, (r_upper - a_eff) / (1.0 - a_eff)))
+
+                    per_tau.append({
+                        "alpha": a_eff, "tau": tau, "k": k, "rS": rS,
+                        "pval": float(pval), "p_upper": float(p_upper)
+                    })
+
+                # Multiple-threshold control
+                pvals = np.array([d["pval"] for d in per_tau])
+                if combine == "bonferroni":
+                    p_global = float(np.minimum(1.0, pvals.min() * len(pvals)))
+                    pick = int(pvals.argmin())
+                else:  # 'min' without correction (useful for exploration)
+                    p_global = float(pvals.min());
+                    pick = int(pvals.argmin())
+
+                best = per_tau[pick]
+                decision = (p_global < delta)
+
+                return {
+                    "p_value": p_global,
+                    "decision_reject_H0_p_equals_0": decision,
+                    "best_tau": best["tau"],
+                    "alpha_at_tau": best["alpha"],
+                    "k_obs": best["k"],
+                    "rS": best["rS"],
+                    "p_upper": best["p_upper"],
+                    "details_per_tau": per_tau,
+                }
+
+            p_value = (no_positives_test(prob_y_test[s_test == 0], prob_y_test[s_test == 1], delta=0.01))["p_value"]
+
+            if run_type == "tail":
+                def prior_from_tail_ratio(scores_S, scores_N, top_frac=0.2):
+                    sS = np.sort(scores_S)
+                    sN = np.sort(scores_N)
+                    # candidate thresholds in the high tail of N
+                    start = int((1 - top_frac) * len(sN))
+                    taus = sN[start:]  # use quantiles from N's tail
+
+                    # survival functions at taus
+                    def surv(x, t):  # P(X >= t)
+                        # fraction >= t via binary search
+                        j = np.searchsorted(x, t, side='left')
+                        return (len(x) - j) / len(x)
+
+                    ratios = []
+                    eps = 1.0 / max(1, len(sN))  # ridge to avoid 0
+                    for t in taus:
+                        rN = max(eps, surv(sN, t))
+                        rS = surv(sS, t)
+                        ratios.append(rS / rN)
+                    kappa_hat = max(0.0, min(ratios))  # inf over tail
+                    p_hat = max(0.0, min(1.0, 1.0 - kappa_hat))
+                    return p_hat
+                print(internal_pi)
+                internal_pi = prior_from_tail_ratio(prob_y_test[s_test == 0], prob_y_test[s_test == 1])
+
+                # internal_pi = estimate_p_roc_inversion(X_test.mean(axis=1)[s_test == 0], X_test.mean(axis=1)[s_test == 1], scores_U=X_test.mean(axis=1)[s_test == 0], pi=internal_pi)["p_hat"]
+            # Flip labels
+            prob_y_test = 1 - prob_y_test
+            y_test = 1 - y_test
+
+            acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+            bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+
+            results = {
+                "method": "lbe_with_internal_prior",
+                "acc": acc,
+                "bacc": bacc,
+                "time": run_time,
+                "p_hat_test": internal_pi,
+                "H0_p_value": p_value,
+            }
 
         if run_type == "correction" and X_ctrl_test is not None:
             results.update(
@@ -406,6 +523,7 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
                     "p_hat_comb": internal_pi_comb,
                     'p_hat_2MIA-comb': 2*internal_pi-internal_pi_comb,
                     'p_hat_MIA-ctrl':internal_pi - internal_pi_ctrl,
+                    "H0_p_value": p_value,
                 }
             )
 
@@ -520,7 +638,7 @@ def main():
         type=str,
         default="real",
         required=False,
-        choices=["real", "synth", "ae_synth", "correction"],
+        choices=["real", "synth", "ae_synth", "correction", "mean_mia_score", "tail"],
         help="Type of run to perform: real (pattern1&2), synth (pattern1&2 and pattern5&6), ae_synth (pattern3&4 and pattern5&6) (default: real)",
     )
     args = parser.parse_args()
