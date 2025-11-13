@@ -459,23 +459,23 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
                 "details_per_tau": per_tau,
             }
 
-            p_value = (no_positives_test(prob_y_test[s_test == 0], prob_y_test[s_test == 1], delta=0.01))["p_value"]
+        p_value = (no_positives_test(prob_y_test[s_test == 0], prob_y_test[s_test == 1], delta=0.01))["p_value"]
 
-                        # Flip labels
-            prob_y_test = 1 - prob_y_test
-            y_test = 1 - y_test
+                    # Flip labels
+        prob_y_test = 1 - prob_y_test
+        y_test = 1 - y_test
 
-            acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
-            bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+        acc = accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
+        bacc = balanced_accuracy_score(y_test, np.where(prob_y_test > 0.5, 1, 0))
 
-            results = {
-                "method": "lbe_with_internal_prior",
-                "acc": acc,
-                "bacc": bacc,
-                "time": run_time,
-                "p_hat_test": internal_pi,
-                "H0_p_value": p_value,
-            }
+        results = {
+            "method": "lbe_with_internal_prior",
+            "acc": acc,
+            "bacc": bacc,
+            "time": run_time,
+            "p_hat_test": internal_pi,
+            "H0_p_value": p_value,
+        }
 
         if run_type == "correction" and X_ctrl_test is not None:
             results.update(
