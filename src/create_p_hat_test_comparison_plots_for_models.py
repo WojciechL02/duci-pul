@@ -239,8 +239,6 @@ def create_plots_for_model(model_dir, output_suffix="", bins=None, show_std=True
         if (f.startswith("results_lbe_prior_") or f.startswith("results_agg_"))
         and f.endswith(".csv")
         and "full" not in f
-        and "LR" in f
-        and "bins5" in f
     ]
 
     if not results_files:
