@@ -3,10 +3,10 @@ import argparse
 import os
 import re
 from collections import defaultdict
-import numpy as np
-import pandas as pd
 
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 plt.rcParams.update(
     {
@@ -26,22 +26,18 @@ plt.rcParams.update(
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(
-    description="Create p_hat_test comparison plots for different models and methods."
+    description="Create p_hat_test comparison plots for a model directory."
 )
 parser.add_argument(
-    "--results_dir",
+    "model_dir",
     type=str,
-    default="../",
-    help="Base directory containing results (default: ../)",
+    help="Directory containing model results to plot",
 )
 parser.add_argument(
-    "--bins",
-    type=str,
-    default="10",
-    help="Bin size to use (5, 10, or 30) (default: 10)",
-)
-parser.add_argument(
-    "--output_suffix", type=str, default="", help="Suffix to add to output filenames"
+    "--output_suffix", 
+    type=str, 
+    default="", 
+    help="Suffix to add to output filenames"
 )
 parser.add_argument(
     "--no-std",
@@ -49,28 +45,65 @@ parser.add_argument(
     action="store_false",
     help="Do not show standard deviation in plots (default: show std)",
 )
+parser.add_argument(
+    "--ss_len",
+    type=int,
+    nargs="+",
+    default=[500],
+    help="Filter results by suspect set length(s) (e.g., 100 500 1000 1500)",
+)
+parser.add_argument(
+    "--run_type",
+    type=str,
+    nargs="+",
+    choices=["real", "ae_synth", "synth", "correction"],
+    default=["real", "ae_synth", "synth", "correction"],
+    help="Filter results by run type(s) (e.g., real ae_synth)",
+)
+parser.add_argument(
+    "--bins",
+    type=int,
+    nargs="+",
+    help="Filter results by number of bins (e.g., 5 10 30)",
+)
+parser.add_argument(
+    "--PUL_method_type",
+    type=str,
+    nargs="+",
+    default=["LR"],
+    help="Filter results by PUL method type (e.g., LR MLP)",
+)
+parser.add_argument(
+    "--models",
+    type=str,
+    nargs="+",
+    default=["rar_xl", "rar_xxl", "var_24", "var_30"],
+    help="Filter results by model names (e.g., rar_xl rar_xxl var_24 var_30)",
+)
 args = parser.parse_args()
 
 
 # Function to extract mean value from "mean±std" format
 def extract_mean(value_str):
-    return float(value_str.split("±")[0])
+    result = float(value_str.split("±")[0])
+    return result
 
 
 # Function to extract std value from "mean±std" format
 def extract_std(value_str):
     parts = value_str.split("±")
     if len(parts) > 1:
-        return float(parts[1])
+        result = float(parts[1])
+        return result
     return 0.0
 
 
 # Function to extract model name, run type, p value, ss_len, model_type, and bins from filename
 def parse_filename(filename):
-    print(filename)
-    # Try to match lbe_prior pattern with run_type and ss_len
+    # Match pattern with model name, run_type, ss_len, bins number, PUL method name, p value
+    # First try to match with specific model names to avoid matching "ae" as part of the model name
     match = re.match(
-        r"results_lbe_prior_(rar_xl|rar_xxl|rar|var_24|var_30|dit_rf|uvit_t2i_deep)_(real|ae_synth|synth|correction)_len(\d+)_bins(\d+)_lbe(\w+)_p=(.+)\.csv",
+        r"results_lbe_prior_(rar_xl|rar_xxl|var_24|var_30|dit_rf|uvit_t2i_deep)_(real|ae_synth|synth|correction)_len(\d+)_bins(\d+)_lbe(\w+)_p=(.+)\.csv",
         filename,
     )
     if match:
@@ -82,43 +115,41 @@ def parse_filename(filename):
         p_value = float(match.group(6))
         return model_name, p_value, run_type, ss_len, model_type, bins
 
-    # Try to match lbe_prior pattern with run_type without ss_len
+    # If the first pattern doesn't match, try a more generic pattern
+    # But be careful to avoid matching "ae_synth" as part of the model name
     match = re.match(
-        r"results_lbe_prior_(rar_xl|rar_xxl|rar|var_24|var_30|dit_rf|uvit_t2i)_(real|ae_synth|synth|correction)_p=(.+)\.csv",
+        r"results_lbe_prior_([^_]+(?:_[^_]+)*)_(real|ae_synth|synth|correction)_len(\d+)_bins(\d+)_lbe(\w+)_p=(.+)\.csv",
         filename,
     )
     if match:
         model_name = match.group(1)
         run_type = match.group(2)
-        p_value = float(match.group(3))
-        return model_name, p_value, run_type, None, None, None
-
-    # Try to match lbe_prior pattern without run_type (assume it's "real")
-    match = re.match(
-        r"results_lbe_prior_(rar_xl|rar_xxl|rar|var_24|var_30|dit_rf|uvit_t2i)_p=(.+)\.csv",
-        filename,
-    )
-    if match:
-        model_name = match.group(1)
-        p_value = float(match.group(2))
-        return model_name, p_value, "real", None, None, None
-
-    # Try to match agg pattern (assume it's "real")
-    match = re.match(
-        r"results_agg_(rar_xl|rar_xxl|rar|var_24|var_30|dit_rf|uvit_t2i)_p=(.+)\.csv",
-        filename,
-    )
-    if match:
-        model_name = match.group(1)
-        p_value = float(match.group(2))
-        return model_name, p_value, "real", None, None, None
+        ss_len = int(match.group(3))
+        bins = int(match.group(4))
+        model_type = match.group(5)
+        p_value = float(match.group(6))
+        return model_name, p_value, run_type, ss_len, model_type, bins
 
     return None, None, None, None, None, None
 
 
 def create_individual_model_plots(
-    model_dir, files_grouped, output_suffix="", show_std=True
+    model_dir, files_grouped, output_suffix="", show_std=True, ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None
 ):
+    """
+    Create individual plots for each model.
+
+    Args:
+        model_dir: Directory containing model results
+        files_grouped: Dictionary mapping model keys to lists of files
+        output_suffix: Suffix to add to output filenames
+        show_std: Whether to show standard deviation in plots
+        ss_len: List of suspect set lengths to include
+        run_type: List of run types to include
+        bins: List of bin numbers to include
+        PUL_method_type: List of PUL method types to include
+        models: List of model names to include
+    """
     for model_key, files in sorted(files_grouped.items()):
         fig, ax = plt.subplots(figsize=(6, 6))
 
@@ -139,26 +170,26 @@ def create_individual_model_plots(
 
         # process all files for this model
         for file in sorted(files, key=lambda x: parse_filename(x)[1]):
-            _, p, run_type, _, _, _ = parse_filename(file)
+            _, p, _run_type_, _, _, _ = parse_filename(file)
             file_path = os.path.join(model_dir, file)
             df = pd.read_csv(file_path, delimiter="\t")
 
             try:
-                if run_type != "correction" and run_type != "synth":
+                if _run_type_ != "correction" and _run_type_ != "synth":
                     if "p_hat_test_mean_std" in df.columns:
                         val = df["p_hat_test_mean_std"].iloc[0]
                         mean = extract_mean(val)
                         std = extract_std(val)
-                elif run_type == "correction":
+                elif _run_type_ == "correction":
                     if "p_hat_2MIA-comb_mean_std" in df.columns:
                         val = df["p_hat_2MIA-comb_mean_std"].iloc[0]
                         mean = extract_mean(val)
                         std = extract_std(val)
 
-                metric_data[run_type]["p"].append(p)
-                metric_data[run_type]["m"].append(mean)
-                metric_data[run_type]["s"].append(std)
-            except:
+                metric_data[_run_type_]["p"].append(p)
+                metric_data[_run_type_]["m"].append(mean)
+                metric_data[_run_type_]["s"].append(std)
+            except Exception as e:
                 continue
 
         # plot
@@ -167,8 +198,8 @@ def create_individual_model_plots(
             "ae_synth": "Synthetic (no correction)",
             "correction": "Synthetic (+correction) (ours)",
         }
-        for run_type, d in metric_data.items():
-            if run_type != "synth":
+        for run_type_, d in metric_data.items():
+            if run_type_ != "synth":
                 if len(d["p"]) == 0:
                     continue
 
@@ -181,8 +212,8 @@ def create_individual_model_plots(
                     p[order],
                     m[order],
                     marker="o",
-                    label=labels[run_type],
-                    color=colors.get(run_type, "gray"),
+                    label=labels[run_type_],
+                    color=colors.get(run_type_, "gray"),
                 )
 
                 if show_std:
@@ -190,7 +221,7 @@ def create_individual_model_plots(
                         p[order],
                         m[order] - s[order],
                         m[order] + s[order],
-                        color=colors.get(run_type, "gray"),
+                        color=colors.get(run_type_, "gray"),
                         alpha=0.2,
                     )
 
@@ -206,23 +237,302 @@ def create_individual_model_plots(
         ax.set_ylim(-0.05, 1.05)
 
         # save
+        # Create a filename that includes the filtering parameters
+        filter_parts = []
+        if ss_len:
+            filter_parts.append(f"ss_len={'-'.join(map(str, ss_len))}")
+        if run_type:
+            filter_parts.append(f"run_type={'-'.join(run_type)}")
+        if bins:
+            filter_parts.append(f"bins={'-'.join(map(str, bins))}")
+        if PUL_method_type:
+            filter_parts.append(f"PUL_method={'-'.join(PUL_method_type)}")
+        if models:
+            filter_parts.append(f"models={'-'.join(models)}")
+
+        filter_suffix = "_".join(filter_parts)
+        if filter_suffix:
+            filter_suffix = f"_{filter_suffix}"
+
         suffix = f"_{output_suffix}" if output_suffix else ""
-        out_png = os.path.join(model_dir, f"p_hat_test_single_{model_key}{suffix}.png")
-        out_pdf = os.path.join(model_dir, f"p_hat_test_single_{model_key}{suffix}.pdf")
+        out_png = os.path.join(model_dir, f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.png")
+        out_pdf = os.path.join(model_dir, f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.pdf")
 
         plt.savefig(out_png, dpi=300, bbox_inches="tight")
         plt.savefig(out_pdf, bbox_inches="tight")
         plt.close(fig)
 
 
-def create_plots_for_model(model_dir, output_suffix="", bins=None, show_std=True):
+def create_grid_plot(
+    model_dir, files_grouped, output_suffix="", show_std=True, ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None
+):
+    """
+    Create a grid of square plots for all models in a single figure.
+
+    Args:
+        model_dir: Directory containing model results
+        files_grouped: Dictionary mapping model keys to lists of files
+        output_suffix: Suffix to add to output filenames
+        show_std: Whether to show standard deviation in plots
+        ss_len: List of suspect set lengths to include
+        run_type: List of run types to include
+        bins: List of bin numbers to include
+        PUL_method_type: List of PUL method types to include
+        models: List of model names to include
+    """
+    # Count the number of models
+    num_models = len(files_grouped)
+    if num_models == 0:
+        print("No models to plot in grid.")
+        return
+
+    # Calculate grid dimensions (try to make it as square as possible)
+    grid_size = int(np.ceil(np.sqrt(num_models)))
+    rows = grid_size
+    cols = grid_size
+
+    # Create a figure with subplots in a grid
+    fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 5*rows), squeeze=False)
+
+    # Define colors for different run types (same as individual plots)
+    colors = {
+        "real": "blue",
+        "ae_synth": "red",
+        "synth": "green",
+        "correction": "gray",
+    }
+
+    # Define labels (same as individual plots)
+    labels = {
+        "real": "Real",
+        "ae_synth": "Synthetic (no correction)",
+        "correction": "Synthetic (+correction) (ours)",
+    }
+
+    # Track which run types are present for the common legend
+    used_run_types = set()
+
+    # Process each model
+    for i, (model_key, files) in enumerate(sorted(files_grouped.items())):
+        # Calculate row and column for this subplot
+        row = i // cols
+        col = i % cols
+        ax = axes[row, col]
+
+        # Dictionary to store metric data for this model
+        metric_data = {
+            "real": {"p": [], "m": [], "s": []},
+            "ae_synth": {"p": [], "m": [], "s": []},
+            "synth": {"p": [], "m": [], "s": []},
+            "correction": {"p": [], "m": [], "s": []},
+        }
+
+        # Process all files for this model
+        for file in sorted(files, key=lambda x: parse_filename(x)[1]):
+            _, p, _run_type_, _, _, _ = parse_filename(file)
+            file_path = os.path.join(model_dir, file)
+            df = pd.read_csv(file_path, delimiter="\t")
+
+            try:
+                if _run_type_ != "correction" and _run_type_ != "synth":
+                    if "p_hat_test_mean_std" in df.columns:
+                        val = df["p_hat_test_mean_std"].iloc[0]
+                        mean = extract_mean(val)
+                        std = extract_std(val)
+
+                        # Debug print for ae_synth
+                elif _run_type_ == "correction":
+                    if "p_hat_2MIA-comb_mean_std" in df.columns:
+                        val = df["p_hat_2MIA-comb_mean_std"].iloc[0]
+                        mean = extract_mean(val)
+                        std = extract_std(val)
+
+                metric_data[_run_type_]["p"].append(p)
+                metric_data[_run_type_]["m"].append(mean)
+                metric_data[_run_type_]["s"].append(std)
+            except Exception as e:
+                continue
+
+        # Plot each run type
+        for run_type_, d in metric_data.items():
+            if run_type_ != "synth":
+                if len(d["p"]) == 0:
+                    continue
+
+                used_run_types.add(run_type_)
+                p = np.array(d["p"])
+                m = np.array(d["m"])
+                s = np.array(d["s"])
+                order = np.argsort(p)
+
+                ax.plot(
+                    p[order],
+                    m[order],
+                    marker="o",
+                    # Don't include label here, we'll create a common legend
+                    color=colors.get(run_type_, "gray"),
+                )
+
+                if show_std:
+                    ax.fill_between(
+                        p[order],
+                        m[order] - s[order],
+                        m[order] + s[order],
+                        color=colors.get(run_type_, "gray"),
+                        alpha=0.2,
+                    )
+
+        # Plot diagonal line
+        ax.plot([0, 1], [0, 1], "k--")
+
+        # Set title and labels
+        if "_" in model_key:
+            parts = model_key.split("_")
+            if len(parts) >= 4 and parts[-1].isdigit() and parts[-2].isalpha():
+                display_model_name = parts[0] + parts[1]
+                ss_len_value = parts[2]
+                model_type = parts[3]
+                bins_value = parts[4]
+                title = f"{display_model_name}\nss_len={ss_len_value}, type={model_type}, bins={bins_value}"
+            elif len(parts) >= 2 and parts[-1].isdigit():
+                display_model_name = "_".join(parts[:-1])
+                ss_len_value = parts[-1]
+                title = f"{display_model_name}\nss_len={ss_len_value}"
+            else:
+                title = model_key
+        else:
+            title = model_key
+
+        ax.set_title(title, fontsize=12)
+        ax.set_xlabel("True p")
+        ax.set_ylabel("Estimated p")
+        ax.grid(True, linestyle="--", alpha=0.7)
+        ax.set_xlim(-0.05, 1.05)
+        ax.set_ylim(-0.05, 1.05)
+
+    # Hide empty subplots
+    for i in range(num_models, rows * cols):
+        row = i // cols
+        col = i % cols
+        axes[row, col].axis('off')
+
+    # Create a common legend
+    handles = []
+    labels_list = []
+    for run_type_ in ["real", "ae_synth", "correction"]:
+        if run_type_ in used_run_types:
+            handle = plt.Line2D([], [], color=colors[run_type_], marker='o', linestyle='-',
+                               label=labels[run_type_])
+            handles.append(handle)
+            labels_list.append(labels[run_type_])
+
+    # Add diagonal line to legend
+    handles.append(plt.Line2D([], [], color='k', linestyle='--', label='True p'))
+    labels_list.append('True p')
+
+    # Place the legend at the bottom of the figure
+    fig.legend(handles, labels_list, loc='lower center', ncol=len(handles), 
+               bbox_to_anchor=(0.5, 0.03), fontsize=12)
+
+    # Adjust layout
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15)  # Make room for the legend
+
+
+    # Save the figure
+    # Create a filename that includes the filtering parameters
+    filter_parts = []
+    if ss_len:
+        filter_parts.append(f"ss_len={'-'.join(map(str, ss_len))}")
+    if run_type:
+        filter_parts.append(f"run_type={'-'.join(run_type)}")
+    if bins:
+        filter_parts.append(f"bins={'-'.join(map(str, bins))}")
+    if PUL_method_type:
+        filter_parts.append(f"PUL_method={'-'.join(PUL_method_type)}")
+    if models:
+        filter_parts.append(f"models={'-'.join(models)}")
+
+    filter_suffix = "_".join(filter_parts)
+    if filter_suffix:
+        filter_suffix = f"_{filter_suffix}"
+
+    suffix = f"_{output_suffix}" if output_suffix else ""
+    model_name = os.path.basename(model_dir)
+    output_png = os.path.join(
+        model_dir, f"p_hat_test_grid_{model_name}{filter_suffix}{suffix}.png"
+    )
+    output_pdf = os.path.join(
+        model_dir, f"p_hat_test_grid_{model_name}{filter_suffix}{suffix}.pdf"
+    )
+    plt.savefig(output_png, dpi=300, bbox_inches="tight")
+    plt.savefig(output_pdf, bbox_inches="tight")
+
+    print(f"Grid plot created and saved to '{output_png}' and '{output_pdf}'")
+    plt.close(fig)
+
+
+def filter_files(files, ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None):
+    """
+    Filter files based on specified criteria
+
+    Args:
+        files: List of files to filter
+        ss_len: List of suspect set lengths to include
+        run_type: List of run types to include
+        bins: List of bin numbers to include
+        PUL_method_type: List of PUL method types to include
+        models: List of model names to include
+
+    Returns:
+        List of files that match the criteria
+    """
+    filtered_files = []
+
+    for file in files:
+        model_name, p_value, file_run_type, file_ss_len, file_model_type, file_bins = parse_filename(file)
+
+        # Skip files that don't match the pattern
+        if model_name is None:
+            continue
+
+        # Filter by model name if specified
+        if models is not None and model_name not in models:
+            continue
+
+        # Filter by ss_len if specified
+        if ss_len is not None and file_ss_len not in ss_len:
+            continue
+
+        # Filter by run_type if specified
+        if run_type is not None and file_run_type not in run_type:
+            continue
+
+        # Filter by bins if specified
+        if bins is not None and file_bins not in bins:
+            continue
+
+        # Filter by PUL_method_type if specified
+        if PUL_method_type is not None and file_model_type not in PUL_method_type:
+            continue
+
+        filtered_files.append(file)
+
+    return filtered_files
+
+
+def create_plots_for_model(model_dir, output_suffix="", ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None, show_std=True):
     """
     Create plots for p_hat_test (real) and p_hat_test_through_scores_and_debiased for other methods
 
     Args:
         model_dir: Directory containing results for a specific model
         output_suffix: Suffix to add to output filenames
-        bins: Number of bins used in the model
+        ss_len: List of suspect set lengths to include
+        run_type: List of run types to include
+        bins: List of bin numbers to include
+        PUL_method_type: List of PUL method types to include
+        models: List of model names to include
         show_std: Whether to show standard deviation in plots (default: True)
     """
     print(f"Processing directory: {model_dir}")
@@ -233,420 +543,87 @@ def create_plots_for_model(model_dir, output_suffix="", bins=None, show_std=True
         return
 
     # Collect all results files (excluding files with 'full' in the name)
-    results_files = [
+    all_files = [
         f
         for f in os.listdir(model_dir)
-        if (f.startswith("results_lbe_prior_") or f.startswith("results_agg_"))
-        and f.endswith(".csv")
+        if f.startswith("results_lbe_prior_") and f.endswith(".csv")
         and "full" not in f
     ]
 
-    if not results_files:
+    if not all_files:
         print(f"No results files found in {model_dir}.")
+        return
+
+    # Filter files based on criteria
+    results_files = filter_files(all_files, ss_len, run_type, bins, PUL_method_type, models)
+
+    if not results_files:
+        print(f"No files match the specified criteria in {model_dir}.")
         return
 
     # Group files by model, ss_len, model_type, and bins
     model_files = defaultdict(list)
     for file in results_files:
-        model_name, _, _, ss_len, model_type, bins_value = parse_filename(file)
+        model_name, _, file_run_type, file_ss_len, file_model_type, file_bins = parse_filename(file)
         if model_name:
-            # For results_WL folder, include model_type and bins in the key
-            if (
-                "results_WL"
-                or "results_WL/uvit" in model_dir
-                and model_type is not None
-                and bins_value is not None
-            ):
-                key = f"{model_name}_{ss_len}_{model_type}_{bins_value}"
-            # Otherwise, use model_name and ss_len as key if ss_len is not None
-            elif ss_len is not None:
-                key = f"{model_name}_{ss_len}"
+            # Create a key based on available information
+            if file_ss_len is not None and file_model_type is not None and file_bins is not None:
+                key = f"{model_name}_{file_ss_len}_{file_model_type}_{file_bins}"
+            elif file_ss_len is not None:
+                key = f"{model_name}_{file_ss_len}"
             else:
                 key = model_name
             model_files[key].append(file)
 
-    # Create a figure with subplots for each model
+    # Print model files for debugging
     num_models = len(model_files)
     if num_models == 0:
         print("No valid model files found.")
         return
 
-    fig, axes = plt.subplots(num_models, 1, figsize=(14, 5 * num_models), sharex=True)
-
-    # If there's only one model, make axes iterable
-    if num_models == 1:
-        axes = [axes]
-
-    # Define colors for different run types
-    colors = {
-        "real": "blue",
-        "ae_synth": "red",
-        "synth": "green",
-        "corrected": "purple",
-    }
-
-    # Dictionary to store MAE values for each model and run type
-    mae_data = {}
-
-    # Process each model
-    for i, (model_name, files) in enumerate(sorted(model_files.items())):
-        ax = axes[i]
-
-        # Dictionary to store metric data across p values for each run type
-        metric_data = {
-            "real": {
-                "p_values": [],
-                "metric_values": [],
-                "std_values": [],
-                "mae": None,
-            },
-            "ae_synth": {
-                "p_values": [],
-                "metric_values": [],
-                "std_values": [],
-                "mae": None,
-            },
-            "synth": {
-                "p_values": [],
-                "metric_values": [],
-                "std_values": [],
-                "mae": None,
-            },
-            "correction": {
-                "p_values": [],
-                "metric_values": [],
-                "std_values": [],
-                "mae": None,
-            },
-        }
-
-        print(f"\nProcessing model: {model_name} with {len(files)} files")
-
-        # Process each file for this model
-        for file in sorted(files, key=lambda x: parse_filename(x)[1]):
-            _, p_value, run_type, ss_len, model_type, bins_value = parse_filename(file)
-            ss_len_info = f", ss_len={ss_len}" if ss_len is not None else ""
-            model_type_info = (
-                f", model_type={model_type}" if model_type is not None else ""
-            )
-            bins_info = f", bins={bins_value}" if bins_value is not None else ""
-            print(
-                f"  Processing file: {file} with p_value={p_value}, run_type={run_type}{ss_len_info}{model_type_info}{bins_info}"
-            )
-
-            try:
-                # Read the CSV file
-                file_path = os.path.join(model_dir, file)
-                print(f"  Reading file from: {file_path}")
-                df = pd.read_csv(file_path, delimiter="\t")
-
-                if run_type != "correction" and run_type != "synth":
-                    # use p_hat_test
-                    if "p_hat_test_mean_std" in df.columns:
-                        # If run_type is real and p_value is 0, set p_hat_test to 0 with std 0
-                        if run_type == "real" and p_value == 0:
-                            p_hat_test_value = 0.0
-                            p_hat_test_std = 0.0
-                            print(f"Setting p_hat_test to 0±0 for p=0 (real)")
-                        else:
-                            p_hat_test_value = extract_mean(
-                                df["p_hat_test_mean_std"].iloc[0]
-                            )
-                            p_hat_test_std = extract_std(
-                                df["p_hat_test_mean_std"].iloc[0]
-                            )
-                            print(
-                                f"Extracted p_hat_test value: {p_hat_test_value}±{p_hat_test_std} for p={p_value} ({run_type})"
-                            )
-
-                        metric_data[run_type]["p_values"].append(p_value)
-                        metric_data[run_type]["metric_values"].append(p_hat_test_value)
-                        metric_data[run_type]["std_values"].append(p_hat_test_std)
-
-                else:
-                    # use p_hat_2MIA-comb
-                    if "p_hat_2MIA-comb_mean_std" in df.columns:
-                        p_hat_2MIA_minus_comb_value = extract_mean(
-                            df["p_hat_2MIA-comb_mean_std"].iloc[0]
-                        )
-                        p_hat_2MIA_minus_comb_std = extract_std(
-                            df["p_hat_2MIA-comb_mean_std"].iloc[0]
-                        )
-                        metric_data[run_type]["p_values"].append(p_value)
-                        metric_data[run_type]["metric_values"].append(
-                            p_hat_2MIA_minus_comb_value
-                        )
-                        metric_data[run_type]["std_values"].append(
-                            p_hat_2MIA_minus_comb_std
-                        )
-                        print(
-                            f"Extracted p_hat_2MIA-comb value: {p_hat_2MIA_minus_comb_value}±{p_hat_2MIA_minus_comb_std} for p={p_value} ({run_type})"
-                        )
-            except Exception as e:
-                print(f"  Error processing {file}: {e}")
-
-        # Plot each run type
-        for run_type, data in metric_data.items():
-            if len(data["p_values"]) > 0:
-                # Sort by p_values to ensure correct line plotting
-                p_values = np.array(data["p_values"])
-                metric_values = np.array(data["metric_values"])
-                std_values = np.array(data["std_values"])
-                sort_idx = np.argsort(p_values)
-
-                # Calculate MAE (Mean Absolute Error)
-                abs_errors = np.abs(metric_values - p_values)
-                mae = np.mean(abs_errors)
-                mae_std = np.std(abs_errors)
-                data["mae"] = mae
-                data["mae_std"] = mae_std
-
-                # Store MAE ± std in the global mae_data dictionary
-                if model_name not in mae_data:
-                    mae_data[model_name] = {}
-                mae_data[model_name][run_type] = (mae, mae_std)
-
-                print(f"    Calculated MAE for {run_type}: {mae:.4f} ± {mae_std:.4f}")
-
-                # Plot the line with the mean values
-                color = colors.get(run_type, "gray")
-                ax.plot(
-                    p_values[sort_idx],
-                    metric_values[sort_idx],
-                    marker="o",
-                    label=run_type,
-                    color=color,
-                    linewidth=2,
-                )
-
-                # Plot the standard deviation as a shaded region if show_std is True
-                if show_std:
-                    ax.fill_between(
-                        p_values[sort_idx],
-                        metric_values[sort_idx] - std_values[sort_idx],
-                        metric_values[sort_idx] + std_values[sort_idx],
-                        color=color,
-                        alpha=0.2,
-                    )
-
-        # Plot the true p values (diagonal line)
-        ax.plot([0.0, 1.0], [0.0, 1.0], "k--", label="True p", linewidth=2)
-
-        # Extract model name, ss_len, model_type, and bins from the key
-        if "_" in model_name:
-            parts = model_name.split("_")
-            # Check if this is a results_WL model with model_type and bins
-            if len(parts) >= 4 and parts[-1].isdigit() and parts[-2].isalpha():
-                display_model_name = parts[0] + parts[1]
-                ss_len = parts[2]
-                model_type = parts[3]
-                bins_value = parts[4]
-                title = f"Model: {display_model_name} (ss_len={ss_len}, model_type={model_type}, bins={bins_value})"
-            # Check if this is a model with ss_len only
-            elif len(parts) >= 2 and parts[-1].isdigit():
-                display_model_name = "_".join(parts[:-1])
-                ss_len = parts[-1]
-                title = f"Model: {display_model_name} (ss_len={ss_len})"
-            else:
-                title = f"Model: {model_name}"
-        else:
-            title = f"Model: {model_name}"
-
-        # Set title and labels
-        ax.set_title(title, fontsize=16, fontweight="bold")
-        ax.set_ylabel("Estimated p", fontsize=14)
-        ax.set_xlabel("True p value", fontsize=14)
-        ax.legend(loc="best", fontsize=12)
-        ax.grid(True, linestyle="--", alpha=0.7)
-
-        # Set axis limits
-        ax.set_xlim(-0.05, 1.05)
-        ax.set_ylim(-0.05, 1.05)
-
-        # Add minor grid
-        ax.minorticks_on()
-        ax.grid(which="minor", linestyle=":", alpha=0.4)
-
-    # Create a table with MAE values for each run type and model
-    run_types = ["real", "ae_synth", "correction"]
-
     # Print MAE values to console output
-    if mae_data:
-        print("\n" + "=" * 60)
-        print("Mean Absolute Error (MAE) for each model and run type:")
-        print("=" * 60)
+    print("\n" + "=" * 60)
+    print("Processing models:")
+    print("=" * 60)
+    for model_name, files in sorted(model_files.items()):
+        print(f"Model: {model_name} with {len(files)} files")
+    print("=" * 60 + "\n")
 
-        # Get all model names
-        model_names = sorted(mae_data.keys())
-
-        # Print header
-        header = f"{'Run Type':<15}"
-        for model_name in model_names:
-            header += f"{model_name:>12}"
-        print(header)
-        print("-" * 60)
-
-        # Print data rows for each run type
-        for run_type in run_types:
-            row = f"{run_type:<15}"
-            for model_name in model_names:
-                if model_name in mae_data and run_type in mae_data[model_name]:
-                    mae_val, mae_std_val = mae_data[model_name][run_type]
-                    row += f"{mae_val:.4f}±{mae_std_val:.4f}"
-                else:
-                    row += f"{'N/A':>12}"
-            print(row)
-        print("=" * 60 + "\n")
-
-    # Create a table at the bottom of the figure
-    if mae_data:
-        # Create a new axis for the table
-        table_height = 0.15  # Adjust as needed
-        table_ax = fig.add_axes([0.15, 0.02, 0.7, table_height])
-        table_ax.axis("off")
-
-        # Get all model names
-        model_names = sorted(mae_data.keys())
-
-        # Prepare table data with run types as rows and models as columns
-        table_data = []
-        for run_type in run_types:
-            row = [run_type]
-            for model_name in model_names:
-                if model_name in mae_data and run_type in mae_data[model_name]:
-                    mae_val, mae_std_val = mae_data[model_name][run_type]
-                    row.append(f"{mae_val:.4f}±{mae_std_val:.4f}")
-                else:
-                    row.append("N/A")
-            table_data.append(row)
-
-        # Create the table
-        table = table_ax.table(
-            cellText=table_data,
-            colLabels=["Run Type"] + model_names,
-            loc="center",
-            cellLoc="center",
-            colColours=["lightgray"] * (len(model_names) + 1),
-            colWidths=[0.3] + [0.2] * len(model_names),
-        )
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)
-
-        # Add a title for the table
-        table_ax.set_title(
-            "Mean Absolute Error (MAE)", fontsize=14, fontweight="bold", pad=20
-        )
-
-        # Adjust layout to make room for the table
-        plt.subplots_adjust(bottom=table_height + 0.1)
-
-    # Set common x-label for the entire figure
-    if mae_data:
-        # Position the x-label above the table
-        fig.text(
-            0.5,
-            table_height + 0.05,
-            "True p value",
-            ha="center",
-            fontsize=16,
-            fontweight="bold",
-        )
-    else:
-        fig.text(0.5, 0.01, "True p value", ha="center", fontsize=16, fontweight="bold")
-
-    plt.tight_layout(rect=[0, table_height + 0.1 if mae_data else 0.03, 1, 0.98])
-    plt.subplots_adjust(hspace=0.3)
-
-    # Add a title for the entire figure
-    model_type = "Linear Regression" if "LR" in model_dir else "MLP"
-    bin_info = f" ({bins} bins)" if bins else ""
-
-    # Check if this is a results_WL directory
-    if "results_WL" or "results_WL/uvit" in model_dir:
-        title = f"Comparison of real, synth, ae_synth, corrected for Models in results_WL with different model types and bins"
-    # Check if this is an r12_11 directory (which contains ss_len in filenames)
-    elif "r12_11" in model_dir:
-        title = f"Comparison of real, synth, ae_synth, corrected for {model_type}{bin_info} Models with different ss_len"
-    else:
-        title = f"Comparison of real, synth, ae_synth, corrected for {model_type}{bin_info} Models"
-
-    # Adjust title position if table exists
-    title_y = 0.99 if not mae_data else 0.995
-    fig.suptitle(title, fontsize=20, fontweight="bold", y=title_y)
-
-    # Save the figure
-    suffix = f"_{output_suffix}" if output_suffix else ""
-    model_name = os.path.basename(model_dir)
-    output_png = os.path.join(
-        model_dir, f"p_hat_test_comparison_plots_{model_name}{suffix}.png"
-    )
-    output_pdf = os.path.join(
-        model_dir, f"p_hat_test_comparison_plots_{model_name}{suffix}.pdf"
-    )
-    plt.savefig(output_png, dpi=300, bbox_inches="tight")
-    plt.savefig(output_pdf, bbox_inches="tight")
-
-    print(f"Plots created and saved to '{output_png}' and '{output_pdf}'")
-
+    # Create individual plots for each model
     create_individual_model_plots(
-        model_dir, model_files, output_suffix=output_suffix, show_std=show_std
+        model_dir, model_files, output_suffix=output_suffix, show_std=show_std,
+        ss_len=ss_len, run_type=run_type, bins=bins, PUL_method_type=PUL_method_type, models=models
+    )
+
+    # Create a grid plot with all models
+    create_grid_plot(
+        model_dir, model_files, output_suffix=output_suffix, show_std=show_std,
+        ss_len=ss_len, run_type=run_type, bins=bins, PUL_method_type=PUL_method_type, models=models
     )
 
 
 def main():
     # Get command line arguments
-    base_dir = args.results_dir
-    bins = args.bins
+    model_dir = args.model_dir
     output_suffix = args.output_suffix
     show_std = args.show_std
+    ss_len = args.ss_len
+    run_type = args.run_type
+    bins = args.bins
+    PUL_method_type = args.PUL_method_type
+    models = args.models
 
-    # Define directories to process
-    directories = []
-
-    # Add r11_11bin10_LR and r11_11bin10 directories for bins10
-    if bins == "10":
-        directories.extend(
-            [
-                os.path.join(base_dir, "r11_11_bin10_LR"),
-                os.path.join(base_dir, "r11_11_bin10"),
-            ]
-        )
-    # Add similar directories for bins5
-    elif bins == "5":
-        directories.extend(
-            [
-                os.path.join(base_dir, ""),
-            ]
-        )  # os.path.join(base_dir, "")
-    # Add similar directories for bins30
-    elif bins == "30":
-        directories.extend(
-            [
-                os.path.join(base_dir, "r11_11_bin30_LR"),
-                os.path.join(base_dir, "r11_11_bin30"),
-            ]
-        )
-    else:
-        print(f"Invalid bins value: {bins}. Please use 5, 10, or 30.")
-        return
-
-    # Add directories starting with r12_11
-    r12_dirs = [d for d in os.listdir(base_dir) if d.startswith("r12_11")]
-    for r12_dir in r12_dirs:
-        directories.append(os.path.join(base_dir, r12_dir))
-
-    # Process each directory
-    for directory in directories:
-        create_plots_for_model(directory, output_suffix, bins, show_std)
-
-    # Process results_WL folder
-    # results_wl_dir = os.path.join(base_dir, "results_WL/uvit")
-    # if os.path.exists(results_wl_dir):
-    #     print(f"\nProcessing results_WL directory: {results_wl_dir}")
-    #     create_plots_for_model(results_wl_dir, f"WL_{output_suffix}", bins, show_std)
-    # else:
-    #     print(f"\nResults_WL directory not found: {results_wl_dir}")
+    # Process the specified directory
+    create_plots_for_model(
+        model_dir, 
+        output_suffix=output_suffix, 
+        ss_len=ss_len, 
+        run_type=run_type, 
+        bins=bins, 
+        PUL_method_type=PUL_method_type, 
+        models=models,
+        show_std=show_std
+    )
 
 
 if __name__ == "__main__":
