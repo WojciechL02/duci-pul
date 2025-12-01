@@ -1,13 +1,13 @@
 # duci-pul
 
-### How to run
+### Instructions
 
-Single run:
+Update env:
 ```bash
-python3 test_pul_methods.py -nsym 3 -prob 0.5
+pip3 install -r requirements.txt
 ```
 
-All experiments:
+Install pre-commit hooks:
 ```bash
-./run.sh
+pre-commit install
 ```
