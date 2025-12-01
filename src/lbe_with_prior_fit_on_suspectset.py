@@ -31,13 +31,16 @@ def load_features(npz_path):
             arr = np.array([np.array(a) for a in arr])
     return np.nan_to_num(arr, nan=0.0)
 
+
 def safe_logit(p):
     eps = 1e-6
     p = np.clip(p, eps, 1 - eps)
     return np.log(p / (1 - p))
 
+
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
+
 
 def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     """
@@ -77,7 +80,9 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     # Pattern 6: contains _from-nonmem
     nonmem_pattern3 = f"{name}_*from-nonmem*.npz"
 
-    control_pattern = "ControlSEnsemble"
+    control_pattern = "ControlSEnsemble_in"
+    if "uvit" in name:
+        control_pattern = "ControlSEnsemble_coco"
     # Pattern 7: contains _ae_mem
     mem_pattern4 = f"{control_pattern}_*ae_mem*.npz"
     # Pattern 8: contains _ae_nonmem
@@ -86,7 +91,6 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     mem_pattern5 = f"{control_pattern}_*from-mem*.npz"
     # Pattern 10: contains _from-nonmem
     nonmem_pattern5 = f"{control_pattern}_*from-nonmem*.npz"
-
 
     # Try to find files matching the patterns
     mem_matches1 = list(folder.glob(mem_pattern1))
@@ -129,13 +133,14 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
         mem_file_generated = mem_matches[1]
         nonmem_file_generated = nonmem_matches[1]
     elif run_type == "real":
-        mem_file_generated = nonmem_matches[0] #in real we mix only real nonmembers.
+        mem_file_generated = nonmem_matches[0]  # in real we mix only real nonmembers.
         nonmem_file_generated = nonmem_matches[0]
     else:
-        print(f"No generated files found for run_type {run_type} with member patterns: {mem_pattern1}, {mem_pattern2}, {mem_pattern3} ")
+        print(
+            f"No generated files found for run_type {run_type} with member patterns: {mem_pattern1}, {mem_pattern2}, {mem_pattern3} "
+        )
         return 1
     print(f"Using files: {mem_file.name} and {nonmem_file.name}")
-
 
     members = np.load(
         mem_file,
@@ -159,27 +164,31 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     )
     X_nonmem_generated = nonmembers_generated["data"]
 
-    if run_type =="correction":
+    if run_type == "correction":
 
         X_ctrl_ae_mem = load_features(mem_matches4[0])
         X_ctrl_ae_nonmem = load_features(nonmem_matches4[0])
-        X_ctrl_mem_generated   = load_features(mem_matches5[0])
-        X_ctrl_nonmem_generated   = load_features(nonmem_matches5[0])
+        X_ctrl_mem_generated = load_features(mem_matches5[0])
+        X_ctrl_nonmem_generated = load_features(nonmem_matches5[0])
 
     # shuffle with one permutation for all arrays
     # Generate a single permutation large enough for all arrays
-    perm = np.random.permutation(max(len(X_mem), len(X_nonmem), len(X_mem_generated), len(X_nonmem_generated)))
+    perm = np.random.permutation(
+        max(len(X_mem), len(X_nonmem), len(X_mem_generated), len(X_nonmem_generated))
+    )
     # Apply the same permutation to all arrays (using appropriate slices)
-    X_mem = X_mem[perm[:len(X_mem)]]
-    X_nonmem = X_nonmem[perm[:len(X_nonmem)]]
-    X_mem_generated = X_mem_generated[perm[:len(X_mem_generated)]]
-    X_nonmem_generated = X_nonmem_generated[perm[:len(X_nonmem_generated)]]
+    X_mem = X_mem[perm[: len(X_mem)]]
+    X_nonmem = X_nonmem[perm[: len(X_nonmem)]]
+    X_mem_generated = X_mem_generated[perm[: len(X_mem_generated)]]
+    X_nonmem_generated = X_nonmem_generated[perm[: len(X_nonmem_generated)]]
 
     if run_type == "correction":
-        X_ctrl_ae_mem = X_ctrl_ae_mem[perm[:len(X_ctrl_ae_mem)]]
-        X_ctrl_ae_nonmem = X_ctrl_ae_nonmem[perm[:len(X_ctrl_ae_nonmem)]]
-        X_ctrl_mem_generated = X_ctrl_mem_generated[perm[:len(X_ctrl_mem_generated)]]
-        X_ctrl_nonmem_generated = X_ctrl_nonmem_generated[perm[:len(X_ctrl_nonmem_generated)]]
+        X_ctrl_ae_mem = X_ctrl_ae_mem[perm[: len(X_ctrl_ae_mem)]]
+        X_ctrl_ae_nonmem = X_ctrl_ae_nonmem[perm[: len(X_ctrl_ae_nonmem)]]
+        X_ctrl_mem_generated = X_ctrl_mem_generated[perm[: len(X_ctrl_mem_generated)]]
+        X_ctrl_nonmem_generated = X_ctrl_nonmem_generated[
+            perm[: len(X_ctrl_nonmem_generated)]
+        ]
 
     # -----------------------------
     # Test set construction (unlabeled only)
@@ -190,8 +199,8 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     if run_type == "real":
         X_test_nonmem = np.concatenate(
             [
-                X_mem_generated[:int(ss_len/2)],
-                X_nonmem_generated[int(ss_len/2):ss_len],
+                X_mem_generated[: int(ss_len / 2)],
+                X_nonmem_generated[int(ss_len / 2) : ss_len],
             ]
         )
     else:
@@ -199,7 +208,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
         X_test_nonmem = np.concatenate(
             [
                 X_mem_generated[:n_pos_test],
-                X_nonmem_generated[ss_len:ss_len + n_unl_test_nonmem],
+                X_nonmem_generated[ss_len : ss_len + n_unl_test_nonmem],
             ]
         )
 
@@ -207,13 +216,15 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
         [
             X_test_nonmem,
             X_mem[:n_pos_test],
-            X_nonmem[ss_len:ss_len+n_unl_test_nonmem],
+            X_nonmem[ss_len : ss_len + n_unl_test_nonmem],
         ]
     )
 
     y_test = np.concatenate(
         [
-            np.ones(ss_len, dtype=int), #NM_labeled (possibly generated in run_tymes synth)
+            np.ones(
+                ss_len, dtype=int
+            ),  # NM_labeled (possibly generated in run_tymes synth)
             np.zeros(n_pos_test, dtype=int),  # Umembers
             np.ones(n_unl_test_nonmem, dtype=int),  # Unon-members
         ]
@@ -221,7 +232,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
 
     s_test = np.concatenate(
         [
-            np.ones(ss_len, dtype=int), #NM_labeled
+            np.ones(ss_len, dtype=int),  # NM_labeled
             np.zeros(n_pos_test, dtype=int),  # Umembers
             np.zeros(n_unl_test_nonmem, dtype=int),  # Unon-members
         ]
@@ -236,7 +247,7 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
         X_ctrl_test_nonmem = np.concatenate(
             [
                 X_ctrl_mem_generated[:n_pos_test],
-                X_ctrl_nonmem_generated[ss_len:ss_len + n_unl_test_nonmem],
+                X_ctrl_nonmem_generated[ss_len : ss_len + n_unl_test_nonmem],
             ]
         )
 
@@ -244,13 +255,13 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
             [
                 X_ctrl_test_nonmem,
                 X_ctrl_ae_mem[:n_pos_test],
-                X_ctrl_ae_nonmem[ss_len:ss_len + n_unl_test_nonmem],
+                X_ctrl_ae_nonmem[ss_len : ss_len + n_unl_test_nonmem],
             ]
         )
         # scale
         X_ctrl_test = X_ctrl_test.squeeze(1)
         ols = LinearRegression().fit(X_ctrl_test, X_test)
-        Xhat_test = ols.predict(X_ctrl_test) # take only ctrl features explaining MIA
+        Xhat_test = ols.predict(X_ctrl_test)  # take only ctrl features explaining MIA
         scaler = MinMaxScaler()
         X_ctrl_test = scaler.fit_transform(Xhat_test)
 
@@ -319,8 +330,18 @@ def estimate_p_test(
     return p_hat_test
 
 
-def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p=0.5, bins=10, device=1,
-                              run_type="real", ss_len=2000):
+def experiment_lbe_with_prior(
+    name,
+    nsym,
+    lbe_model,
+    results_dir="../results",
+    p=0.5,
+    bins=10,
+    min_bin_count_N=5,
+    device=1,
+    run_type="real",
+    ss_len=2000,
+):
     """
     Run the experiment with LBE using internal prior.
 
@@ -347,21 +368,26 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
         "H0_p_value",
     ]
     if run_type == "correction":
-        metrics += ["p_hat_ctrl", "p_hat_comb", 'p_hat_2MIA-comb', 'p_hat_MIA-ctrl']
+        metrics += ["p_hat_ctrl", "p_hat_comb", "p_hat_2MIA-comb", "p_hat_MIA-ctrl"]
 
     print("\n Method: LBE with internal prior")
     records = []
     for sym in np.arange(0, nsym, 1):
         X_test, y_test, s_test, X_ctrl_test = prepare_data(
-            name=name, seed=sym, p=p, run_type=run_type, ss_len=ss_len,
+            name=name,
+            seed=sym,
+            p=p,
+            run_type=run_type,
+            ss_len=ss_len,
         )
         np.random.seed(sym)
         seed(sym)
 
-
         # Use the LBEWithPrior model
         start_time = time.time()
-        model = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+        model = LBEWithPrior(
+            kind=lbe_model, bins=bins, min_bin_count_N=min_bin_count_N, device=device
+        )
         model.fit(X_test, s_test)
         end_time = time.time()
         run_time = end_time - start_time
@@ -373,10 +399,20 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
 
             # Fit LBEWithPrior on CONTROL-only and COMBINED
             start_time = time.time()
-            mdl_ctrl = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+            mdl_ctrl = LBEWithPrior(
+                kind=lbe_model,
+                bins=bins,
+                min_bin_count_N=min_bin_count_N,
+                device=device,
+            )
             mdl_ctrl.fit(X_ctrl_test, s_test)
 
-            mdl_comb = LBEWithPrior(kind=lbe_model, bins=bins, device=device)
+            mdl_comb = LBEWithPrior(
+                kind=lbe_model,
+                bins=bins,
+                min_bin_count_N=min_bin_count_N,
+                device=device,
+            )
             mdl_comb.fit(X_comb_test, s_test)
             end_time = time.time()
             run_time = end_time - start_time
@@ -393,8 +429,14 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
             q = 1.0 - alpha
             return float(np.quantile(scores_neg, q, method="linear"))
 
-        def no_positives_test(scores_S, scores_N, *, alpha_grid=(1e-3, 2e-3, 5e-3, 1e-2),
-                              combine="bonferroni", delta=0.05):
+        def no_positives_test(
+            scores_S,
+            scores_N,
+            *,
+            alpha_grid=(1e-3, 2e-3, 5e-3, 1e-2),
+            combine="bonferroni",
+            delta=0.05,
+        ):
             """
             One-sided H0: p=0 test + conservative upper bound on p (no TPR needed).
             - Scans several target FPRs (alpha_grid), guards small-sample noise.
@@ -431,10 +473,16 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
                 r_upper = beta.ppf(1 - delta, k + 1, nS - k) if k < nS else 1.0
                 p_upper = max(0.0, min(1.0, (r_upper - a_eff) / (1.0 - a_eff)))
 
-                per_tau.append({
-                    "alpha": a_eff, "tau": tau, "k": k, "rS": rS,
-                    "pval": float(pval), "p_upper": float(p_upper)
-                })
+                per_tau.append(
+                    {
+                        "alpha": a_eff,
+                        "tau": tau,
+                        "k": k,
+                        "rS": rS,
+                        "pval": float(pval),
+                        "p_upper": float(p_upper),
+                    }
+                )
 
             # Multiple-threshold control
             pvals = np.array([d["pval"] for d in per_tau])
@@ -442,11 +490,11 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
                 p_global = float(np.minimum(1.0, pvals.min() * len(pvals)))
                 pick = int(pvals.argmin())
             else:  # 'min' without correction (useful for exploration)
-                p_global = float(pvals.min());
+                p_global = float(pvals.min())
                 pick = int(pvals.argmin())
 
             best = per_tau[pick]
-            decision = (p_global < delta)
+            decision = p_global < delta
 
             return {
                 "p_value": p_global,
@@ -459,9 +507,13 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
                 "details_per_tau": per_tau,
             }
 
-        p_value = (no_positives_test(prob_y_test[s_test == 0], prob_y_test[s_test == 1], delta=0.01))["p_value"]
+        p_value = (
+            no_positives_test(
+                prob_y_test[s_test == 0], prob_y_test[s_test == 1], delta=0.01
+            )
+        )["p_value"]
 
-                    # Flip labels
+        # Flip labels
         prob_y_test = 1 - prob_y_test
         y_test = 1 - y_test
 
@@ -482,8 +534,8 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
                 {
                     "p_hat_ctrl": internal_pi_ctrl,
                     "p_hat_comb": internal_pi_comb,
-                    'p_hat_2MIA-comb': 2*internal_pi-internal_pi_comb,
-                    'p_hat_MIA-ctrl':internal_pi - internal_pi_ctrl,
+                    "p_hat_2MIA-comb": 2 * internal_pi - internal_pi_comb,
+                    "p_hat_MIA-ctrl": internal_pi - internal_pi_ctrl,
                     "H0_p_value": p_value,
                 }
             )
@@ -543,7 +595,6 @@ def experiment_lbe_with_prior(name, nsym, lbe_model, results_dir="../results", p
     )
 
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -564,7 +615,25 @@ def main():
         "-data",
         type=str,
         required=True,
-        help="Model to use. E.g.: var_24",
+        choices=[
+            "mar_b",
+            "mar_h",
+            "mar_l",
+            "rar_b",
+            "rar_l",
+            "rar_xl",
+            "rar_xxl",
+            "var_16",
+            "var_20",
+            "var_24",
+            "var_30",
+            "dit_rf_all",
+            "dit_rf_clid",
+            "uvit_t2i_deep_clid",
+            "pythia-6_9b",
+            "pythia-12b",
+        ],
+        help="Model to use.",
     )
     parser.add_argument(
         "-results",
@@ -579,6 +648,13 @@ def main():
         default=10,
         required=False,
         help="Number of bins for the LBE model (default: 10)",
+    )
+    parser.add_argument(
+        "-min_bin_count_N",
+        type=int,
+        default=5,
+        required=False,
+        help="Minimum number of bins in the Negative subset in p estimation (default: 5)",
     )
     parser.add_argument(
         "-ss_len",
@@ -609,7 +685,7 @@ def main():
         args.nsym,
         args.lbe_model,
         args.results,
-        ss_len = args.ss_len,
+        ss_len=args.ss_len,
         p=args.prob,
         bins=args.bins,
         device=args.device,
