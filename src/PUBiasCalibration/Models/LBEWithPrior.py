@@ -136,6 +136,68 @@ def _lbe_nu_estimate_p_robust(
     return estimated_p
 
 
+def estimate_p_test(
+    lbe_model,
+    X_test,
+    s_test,
+    X_train,
+    s_train,
+    *,
+    proba_index: int = 1,
+):
+    """
+    Estimate prevalence p on the test set using:
+      - test unlabeled scores (s_test == 0)
+    No retraining is done.
+
+    Parameters
+    ----------
+    lbe_model : LBEWithPrior
+        A fitted LBEWithPrior instance (must already contain trained model).
+    X_test : ndarray
+        Test data (contains only unlabeled).
+    s_test : ndarray
+        Observed labels for test (0=unlabeled, 1=known negatives).
+    X_train : ndarray
+        Training data used to extract N reference scores.
+    s_train : ndarray
+        Observed labels for train (0=unlabeled, 1=known negatives).
+    proba_index : int
+        Index of the "U/member-like" probability column in predict_proba (default 1).
+
+    Returns
+    -------
+    float
+        Estimated member prevalence p_hat on the test set.
+    """
+    if lbe_model.model is None:
+        raise RuntimeError("LBE model must be fitted first (call fit() on train).")
+
+    # predict_proba on both splits
+    probs_test = lbe_model.predict_proba(X_test)
+    probs_train = lbe_model.predict_proba(X_train)
+
+    scores_test_U = probs_test[:, proba_index][s_test == 0]
+    scores_train_N = probs_train[:, proba_index][s_train == 1]
+
+    # orientation check (flip if needed)
+    if np.mean(scores_test_U) < np.mean(scores_train_N):
+        scores_test_U = 1.0 - scores_test_U
+        scores_train_N = 1.0 - scores_train_N
+
+    # run robust LBE on those two score sets
+    p_hat_test = _lbe_nu_estimate_p_robust(
+        scores_test_U,
+        scores_train_N,
+        bins=lbe_model.bins,
+        tail_trim=lbe_model.tail_trim,
+        min_bin_count_N=lbe_model.min_bin_count_N,
+        min_bin_count_U=lbe_model.min_bin_count_U,
+        relax=lbe_model.relax,
+    )
+    return p_hat_test
+
+
 class LBEWithPrior(BaseEstimator):
     """
     NU setting:
@@ -193,7 +255,6 @@ class LBEWithPrior(BaseEstimator):
     def get_prior(self):
         return self.prior_()
 
-    # ---------- NEW: estimate p on ANY new dataset without retraining ----------
     def estimate_p_on(self, X_new, s_new):
         """
         Reuse the trained model to estimate prevalence p on a new split/dataset.
@@ -203,14 +264,12 @@ class LBEWithPrior(BaseEstimator):
             raise RuntimeError("Model not trained. Call fit() first.")
         return self._estimate_p_from_X_and_s(X_new, s_new)
 
-    # ---------- Helper: shared logic ----------
     def _estimate_p_from_X_and_s(self, X, s):
         probs = self.predict_proba(X)  # (n,2)
         scores = probs[:, self.proba_index]  # prob of “U/member-like” class
         scores_U = scores[s == 0]
         scores_N = scores[s == 1]
 
-        # Orientation check for probabilities; flip if needed
         if np.mean(scores_U) < np.mean(scores_N):
             scores_U = 1.0 - scores_U
             scores_N = 1.0 - scores_N
@@ -226,7 +285,6 @@ class LBEWithPrior(BaseEstimator):
         )
         return p_hat
 
-    # ---------- Optional: estimate directly from scores without X ----------
     def estimate_p_from_scores(self, scores: np.ndarray, s: np.ndarray):
         """
         If you already have predict_proba scores for a dataset (prob of U/member-like),
