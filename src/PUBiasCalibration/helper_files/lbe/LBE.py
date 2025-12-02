@@ -244,13 +244,11 @@ def lbe_train(X, s, kind="LR", epochs=1000, device=None):
     Returns:
         Trained LBE model
     """
-    start_time = time.time()
-
     p = X.shape[1]
     lbe = LBE(p, kind=kind, device=device)
 
     # Print device information
-    print(f"Training LBE model on device: {lbe.device}")
+    # print(f"Training LBE model on device: {lbe.device}")
 
     X = torch.from_numpy(X)
     s = torch.from_numpy(s)
@@ -270,18 +268,9 @@ def lbe_train(X, s, kind="LR", epochs=1000, device=None):
 
         for M_step_iter in range(100):
             optimizer.zero_grad()
-            # Forward pass
             loss, grad_theta_1, grad_theta_2 = lbe.loss(X, s, P_y_hat)
-            # Backward pass
             loss.backward()
             optimizer.step()
-
-        # print('Epoch {}: train loss: {}'
-        #    .format(epoch, loss.item()))
-
-    end_time = time.time()
-    print(f"LBE training completed in {end_time - start_time:.2f} seconds")
-
     return lbe
 
 
@@ -296,7 +285,6 @@ def lbe_predict_proba(lbe, Xtest):
     Returns:
         Probability predictions (numpy array)
     """
-    start_time = time.time()
 
     Xtest = torch.from_numpy(Xtest)
     Xtest = Xtest.float()
@@ -306,8 +294,4 @@ def lbe_predict_proba(lbe, Xtest):
 
     # Move results back to CPU for numpy conversion
     y_proba = lbe_out.squeeze().detach().cpu().numpy()
-
-    end_time = time.time()
-    print(f"LBE prediction completed in {end_time - start_time:.4f} seconds")
-
     return y_proba
