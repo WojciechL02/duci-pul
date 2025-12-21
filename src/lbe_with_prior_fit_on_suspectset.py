@@ -48,6 +48,9 @@ def parse_args():
             "uvit_t2i_deep_clid",
             "pythia-6_9b",
             "pythia-12b",
+            "gpt2-xl",
+            "gpt-j-6B",
+            "gpt-neox-20b",
         ],
         help="Model to use.",
     )
@@ -131,7 +134,6 @@ def main():
     tstart = time.time()
     records = []
     for sym in np.arange(0, config["nsym"], 1):
-        print(f"Run {sym+1}/{config['nsym']}")
         X_test, y_test, s_test, X_ctrl_test = prepare_data(
             name=args.data,
             seed=sym,
@@ -205,6 +207,7 @@ def main():
             "p_hat_test": internal_pi,
             "H0_p_value": p_value,
         }
+        print(f"Run {sym + 1}/{config['nsym']}: acc={acc:.3f}, p_hat={internal_pi:.3f}")
 
         if args.run_type == "correction" and X_ctrl_test is not None:
             results.update(
