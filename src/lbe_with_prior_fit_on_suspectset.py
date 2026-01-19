@@ -97,6 +97,12 @@ def parse_args():
         choices=["real", "synth", "ae_synth", "correction", "mean_mia_score", "tail"],
         help="Type of run to perform: real (pattern1&2), synth (pattern1&2 and pattern5&6), ae_synth (pattern3&4 and pattern5&6) (default: real)",
     )
+    parser.add_argument(
+        "-data_dir",
+        type=str,
+        default="data",
+        required=False,
+    )
     return parser.parse_args()
 
 
@@ -140,6 +146,7 @@ def main():
             p=args.prob,
             run_type=args.run_type,
             ss_len=args.ss_len,
+            data_dir=args.data_dir,
         )
         np.random.seed(sym)
         seed(sym)

@@ -34,10 +34,7 @@ parser.add_argument(
     help="Directory containing model results to plot",
 )
 parser.add_argument(
-    "--output_suffix", 
-    type=str, 
-    default="", 
-    help="Suffix to add to output filenames"
+    "--output_suffix", type=str, default="", help="Suffix to add to output filenames"
 )
 parser.add_argument(
     "--no-std",
@@ -77,7 +74,18 @@ parser.add_argument(
     "--models",
     type=str,
     nargs="+",
-    default=["rar_xl", "rar_xxl", "var_24", "var_30"],
+    default=[
+        "rar_b",
+        "rar_l",
+        "rar_xl",
+        "rar_xxl",
+        "var_16",
+        "var_20",
+        "var_24",
+        "var_30",
+        "pythia-6_9b",
+        "pythia-12b",
+    ],
     help="Filter results by model names (e.g., rar_xl rar_xxl var_24 var_30)",
 )
 args = parser.parse_args()
@@ -103,7 +111,7 @@ def parse_filename(filename):
     # Match pattern with model name, run_type, ss_len, bins number, PUL method name, p value
     # First try to match with specific model names to avoid matching "ae" as part of the model name
     match = re.match(
-        r"results_lbe_prior_(rar_xl|rar_xxl|var_24|var_30|dit_rf|uvit_t2i_deep)_(real|ae_synth|synth|correction)_len(\d+)_bins(\d+)_lbe(\w+)_p=(.+)\.csv",
+        r"results_lbe_prior_(rar_b|rar_l|rar_xl|rar_xxl|var_16|var_20|var_24|var_30|dit_rf|uvit_t2i_deep)_(real|ae_synth|synth|correction)_len(\d+)_bins(\d+)_lbe(\w+)_p=(.+)\.csv",
         filename,
     )
     if match:
@@ -134,7 +142,15 @@ def parse_filename(filename):
 
 
 def create_individual_model_plots(
-    model_dir, files_grouped, output_suffix="", show_std=True, ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None
+    model_dir,
+    files_grouped,
+    output_suffix="",
+    show_std=True,
+    ss_len=None,
+    run_type=None,
+    bins=None,
+    PUL_method_type=None,
+    models=None,
 ):
     """
     Create individual plots for each model.
@@ -255,8 +271,12 @@ def create_individual_model_plots(
             filter_suffix = f"_{filter_suffix}"
 
         suffix = f"_{output_suffix}" if output_suffix else ""
-        out_png = os.path.join(model_dir, f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.png")
-        out_pdf = os.path.join(model_dir, f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.pdf")
+        out_png = os.path.join(
+            model_dir, f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.png"
+        )
+        out_pdf = os.path.join(
+            model_dir, f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.pdf"
+        )
 
         plt.savefig(out_png, dpi=300, bbox_inches="tight")
         plt.savefig(out_pdf, bbox_inches="tight")
@@ -264,7 +284,15 @@ def create_individual_model_plots(
 
 
 def create_grid_plot(
-    model_dir, files_grouped, output_suffix="", show_std=True, ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None
+    model_dir,
+    files_grouped,
+    output_suffix="",
+    show_std=True,
+    ss_len=None,
+    run_type=None,
+    bins=None,
+    PUL_method_type=None,
+    models=None,
 ):
     """
     Create a grid of square plots for all models in a single figure.
@@ -292,7 +320,7 @@ def create_grid_plot(
     cols = grid_size
 
     # Create a figure with subplots in a grid
-    fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 5*rows), squeeze=False)
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows), squeeze=False)
 
     # Define colors for different run types (same as individual plots)
     colors = {
@@ -388,7 +416,8 @@ def create_grid_plot(
         # Set title and labels
         if "_" in model_key:
             parts = model_key.split("_")
-            if len(parts) >= 4 and parts[-1].isdigit() and parts[-2].isalpha():
+            print(parts)
+            if len(parts) > 4 and parts[-1].isdigit() and parts[-2].isalpha():
                 display_model_name = parts[0] + parts[1]
                 ss_len_value = parts[2]
                 model_type = parts[3]
@@ -414,30 +443,41 @@ def create_grid_plot(
     for i in range(num_models, rows * cols):
         row = i // cols
         col = i % cols
-        axes[row, col].axis('off')
+        axes[row, col].axis("off")
 
     # Create a common legend
     handles = []
     labels_list = []
     for run_type_ in ["real", "ae_synth", "correction"]:
         if run_type_ in used_run_types:
-            handle = plt.Line2D([], [], color=colors[run_type_], marker='o', linestyle='-',
-                               label=labels[run_type_])
+            handle = plt.Line2D(
+                [],
+                [],
+                color=colors[run_type_],
+                marker="o",
+                linestyle="-",
+                label=labels[run_type_],
+            )
             handles.append(handle)
             labels_list.append(labels[run_type_])
 
     # Add diagonal line to legend
-    handles.append(plt.Line2D([], [], color='k', linestyle='--', label='True p'))
-    labels_list.append('True p')
+    handles.append(plt.Line2D([], [], color="k", linestyle="--", label="True p"))
+    labels_list.append("True p")
 
     # Place the legend at the bottom of the figure
-    fig.legend(handles, labels_list, loc='lower center', ncol=len(handles), 
-               bbox_to_anchor=(0.5, 0.03), fontsize=12)
+    fig.legend(
+        handles,
+        labels_list,
+        loc="lower center",
+        ncol=len(handles),
+        bbox_to_anchor=(0.5, 0.03),
+        fontsize=12,
+    )
 
     # Adjust layout
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.15)  # Make room for the legend
-
 
     # Save the figure
     # Create a filename that includes the filtering parameters
@@ -472,7 +512,9 @@ def create_grid_plot(
     plt.close(fig)
 
 
-def filter_files(files, ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None):
+def filter_files(
+    files, ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None
+):
     """
     Filter files based on specified criteria
 
@@ -490,7 +532,9 @@ def filter_files(files, ss_len=None, run_type=None, bins=None, PUL_method_type=N
     filtered_files = []
 
     for file in files:
-        model_name, p_value, file_run_type, file_ss_len, file_model_type, file_bins = parse_filename(file)
+        model_name, p_value, file_run_type, file_ss_len, file_model_type, file_bins = (
+            parse_filename(file)
+        )
 
         # Skip files that don't match the pattern
         if model_name is None:
@@ -521,7 +565,16 @@ def filter_files(files, ss_len=None, run_type=None, bins=None, PUL_method_type=N
     return filtered_files
 
 
-def create_plots_for_model(model_dir, output_suffix="", ss_len=None, run_type=None, bins=None, PUL_method_type=None, models=None, show_std=True):
+def create_plots_for_model(
+    model_dir,
+    output_suffix="",
+    ss_len=None,
+    run_type=None,
+    bins=None,
+    PUL_method_type=None,
+    models=None,
+    show_std=True,
+):
     """
     Create plots for p_hat_test (real) and p_hat_test_through_scores_and_debiased for other methods
 
@@ -546,8 +599,7 @@ def create_plots_for_model(model_dir, output_suffix="", ss_len=None, run_type=No
     all_files = [
         f
         for f in os.listdir(model_dir)
-        if f.startswith("results_lbe_prior_") and f.endswith(".csv")
-        and "full" not in f
+        if f.startswith("results_lbe_prior_") and f.endswith(".csv") and "full" not in f
     ]
 
     if not all_files:
@@ -555,7 +607,9 @@ def create_plots_for_model(model_dir, output_suffix="", ss_len=None, run_type=No
         return
 
     # Filter files based on criteria
-    results_files = filter_files(all_files, ss_len, run_type, bins, PUL_method_type, models)
+    results_files = filter_files(
+        all_files, ss_len, run_type, bins, PUL_method_type, models
+    )
 
     if not results_files:
         print(f"No files match the specified criteria in {model_dir}.")
@@ -564,10 +618,16 @@ def create_plots_for_model(model_dir, output_suffix="", ss_len=None, run_type=No
     # Group files by model, ss_len, model_type, and bins
     model_files = defaultdict(list)
     for file in results_files:
-        model_name, _, file_run_type, file_ss_len, file_model_type, file_bins = parse_filename(file)
+        model_name, _, file_run_type, file_ss_len, file_model_type, file_bins = (
+            parse_filename(file)
+        )
         if model_name:
             # Create a key based on available information
-            if file_ss_len is not None and file_model_type is not None and file_bins is not None:
+            if (
+                file_ss_len is not None
+                and file_model_type is not None
+                and file_bins is not None
+            ):
                 key = f"{model_name}_{file_ss_len}_{file_model_type}_{file_bins}"
             elif file_ss_len is not None:
                 key = f"{model_name}_{file_ss_len}"
@@ -591,14 +651,28 @@ def create_plots_for_model(model_dir, output_suffix="", ss_len=None, run_type=No
 
     # Create individual plots for each model
     create_individual_model_plots(
-        model_dir, model_files, output_suffix=output_suffix, show_std=show_std,
-        ss_len=ss_len, run_type=run_type, bins=bins, PUL_method_type=PUL_method_type, models=models
+        model_dir,
+        model_files,
+        output_suffix=output_suffix,
+        show_std=show_std,
+        ss_len=ss_len,
+        run_type=run_type,
+        bins=bins,
+        PUL_method_type=PUL_method_type,
+        models=models,
     )
 
     # Create a grid plot with all models
     create_grid_plot(
-        model_dir, model_files, output_suffix=output_suffix, show_std=show_std,
-        ss_len=ss_len, run_type=run_type, bins=bins, PUL_method_type=PUL_method_type, models=models
+        model_dir,
+        model_files,
+        output_suffix=output_suffix,
+        show_std=show_std,
+        ss_len=ss_len,
+        run_type=run_type,
+        bins=bins,
+        PUL_method_type=PUL_method_type,
+        models=models,
     )
 
 
@@ -615,14 +689,14 @@ def main():
 
     # Process the specified directory
     create_plots_for_model(
-        model_dir, 
-        output_suffix=output_suffix, 
-        ss_len=ss_len, 
-        run_type=run_type, 
-        bins=bins, 
-        PUL_method_type=PUL_method_type, 
+        model_dir,
+        output_suffix=output_suffix,
+        ss_len=ss_len,
+        run_type=run_type,
+        bins=bins,
+        PUL_method_type=PUL_method_type,
         models=models,
-        show_std=show_std
+        show_std=show_std,
     )
 
 
