@@ -14,8 +14,8 @@ def load_npz(path):
     return data["data"]
 
 
-def load_files(prefix: str, data_type: str):
-    folder = Path("../data")
+def load_files(prefix: str, data_type: str, data_dir: str):
+    folder = Path(f"../{data_dir}")
     mem_pattern = f"{prefix}_*{data_type}*_mem*.npz"
     nonmem_pattern = f"{prefix}_*{data_type}*_nonmem*.npz"
     if data_type == "from":
@@ -28,8 +28,8 @@ def load_files(prefix: str, data_type: str):
     return mem_matches[0], nonmem_matches[0]
 
 
-def load_data(name: str, data_type: str):
-    mem_match, nonmem_match = load_files(name, data_type)
+def load_data(name: str, data_type: str, data_dir: str):
+    mem_match, nonmem_match = load_files(name, data_type, data_dir)
     members = load_npz(mem_match)
     nonmembers = load_npz(nonmem_match)
     return members, nonmembers
@@ -42,7 +42,9 @@ def permute_datasets(permutation, datasets):
     return permuted
 
 
-def prepare_data(name, seed, p, ss_len=2000, run_type="real", bootstrap=False):
+def prepare_data(
+    name, seed, p, ss_len=2000, run_type="real", data_dir="data", bootstrap=False
+):
     """
     Prepare data for the experiment.
 
@@ -58,6 +60,8 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real", bootstrap=False):
         Size of the suspect set.
     run_type : str
         Type of the experiment: "real", "ae_synth", "correction".
+    data_dir: str
+        Data source directory.
     bootstrap : bool
         Whether to sample data with replacement (each run should have different seed then).
 
@@ -71,16 +75,16 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real", bootstrap=False):
     np.random.seed(seed)
 
     if run_type == "real":
-        X_mem, X_nonmem = load_data(name, "real")
+        X_mem, X_nonmem = load_data(name, "real", data_dir)
         X_mem_generated = X_nonmem.copy()
         X_nonmem_generated = X_nonmem.copy()
 
     elif run_type == "synth":
-        X_mem, X_nonmem = load_data(name, "real")
-        X_mem_generated, X_nonmem_generated = load_data(name, "from")
+        X_mem, X_nonmem = load_data(name, "real", data_dir)
+        X_mem_generated, X_nonmem_generated = load_data(name, "from", data_dir)
     elif run_type in ("ae_synth", "correction"):
-        X_mem, X_nonmem = load_data(name, "ae")
-        X_mem_generated, X_nonmem_generated = load_data(name, "from")
+        X_mem, X_nonmem = load_data(name, "ae", data_dir)
+        X_mem_generated, X_nonmem_generated = load_data(name, "from", data_dir)
     else:
         raise FileNotFoundError(f"No matching files found for run_type {run_type}.")
 
