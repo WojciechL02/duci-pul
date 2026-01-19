@@ -7,7 +7,7 @@ from PUBiasCalibration.helper_files.lbe.LBE import lbe_train, lbe_predict_proba
 from sklearn.base import BaseEstimator
 
 
-def seed(seed):
+def seed_everything(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
