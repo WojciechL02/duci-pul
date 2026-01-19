@@ -42,7 +42,7 @@ def permute_datasets(permutation, datasets):
     return permuted
 
 
-def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
+def prepare_data(name, seed, p, ss_len=2000, run_type="real", bootstrap=False):
     """
     Prepare data for the experiment.
 
@@ -58,6 +58,8 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
         Size of the suspect set.
     run_type : str
         Type of the experiment: "real", "ae_synth", "correction".
+    bootstrap : bool
+        Whether to sample data with replacement (each run should have different seed then).
 
     Returns
     -------
@@ -82,12 +84,18 @@ def prepare_data(name, seed, p, ss_len=2000, run_type="real"):
     else:
         raise FileNotFoundError(f"No matching files found for run_type {run_type}.")
 
-    perm = np.random.permutation(
-        max(len(X_mem), len(X_nonmem), len(X_mem_generated), len(X_nonmem_generated))
-    )
+    N = min(len(X_mem), len(X_nonmem), len(X_mem_generated), len(X_nonmem_generated))
+    perm = np.random.permutation(N)
     X_mem, X_nonmem, X_mem_generated, X_nonmem_generated = permute_datasets(
         perm, [X_mem, X_nonmem, X_mem_generated, X_nonmem_generated]
     )
+
+    if bootstrap:
+        boot_idx = np.random.choice(N, size=N, replace=True)
+        X_mem = X_mem[boot_idx]
+        X_nonmem = X_nonmem[boot_idx]
+        X_mem_generated = X_mem_generated[boot_idx]
+        X_nonmem_generated = X_nonmem_generated[boot_idx]
 
     n_pos_test = int(ss_len * p)  # members inside suspect set
     n_unl_test_nonmem = ss_len - n_pos_test  # non-members inside test unlabeled

@@ -7,7 +7,7 @@ from data import prepare_data
 from utils import no_positives_test, save_results, print_summary
 from PUBiasCalibration.Models.LBEWithPrior import (
     LBEWithPrior,
-    seed,
+    seed_everything,
 )
 
 
@@ -97,6 +97,13 @@ def parse_args():
         choices=["real", "synth", "ae_synth", "correction", "mean_mia_score", "tail"],
         help="Type of run to perform: real (pattern1&2), synth (pattern1&2 and pattern5&6), ae_synth (pattern3&4 and pattern5&6) (default: real)",
     )
+    parser.add_argument(
+        "-seed",
+        type=int,
+        deafult=42,
+        required=False,
+    )
+    parser.add_argument("--bootstrap", type=bool, action="store_true")
     return parser.parse_args()
 
 
@@ -134,15 +141,17 @@ def main():
     tstart = time.time()
     records = []
     for sym in np.arange(0, config["nsym"], 1):
+        seed = args["seed"] * 1000 + int(sym)
         X_test, y_test, s_test, X_ctrl_test = prepare_data(
             name=args.data,
-            seed=sym,
+            seed=seed,
             p=args.prob,
             run_type=args.run_type,
             ss_len=args.ss_len,
+            bootstrap=args.bootstrap,
         )
-        np.random.seed(sym)
-        seed(sym)
+        np.random.seed(seed)
+        seed_everything(seed)
 
         start_time = time.time()
         model = LBEWithPrior(
