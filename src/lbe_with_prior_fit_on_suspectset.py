@@ -106,10 +106,10 @@ def parse_args():
     parser.add_argument(
         "-seed",
         type=int,
-        deafult=42,
+        default=42,
         required=False,
     )
-    parser.add_argument("--bootstrap", type=bool, action="store_true")
+    parser.add_argument("--bootstrap", action="store_true")
     return parser.parse_args()
 
 
@@ -147,7 +147,7 @@ def main():
     tstart = time.time()
     records = []
     for sym in np.arange(0, config["nsym"], 1):
-        seed = args["seed"] * 1000 + int(sym)
+        seed = args.seed * 1000 + int(sym)
         X_test, y_test, s_test, X_ctrl_test = prepare_data(
             name=args.data,
             seed=seed,
