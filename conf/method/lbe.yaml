@@ -1,0 +1,13 @@
+name: lbe
+
+pul_args:
+  pretraining_epochs: 100
+  epochs: 30
+  m_steps: 20
+  pretraining_lr: 1e-3
+  lr: 1e-4
+  kind: LR
+
+method_args:
+  bins: 5
+  min_bin_count_N: 5

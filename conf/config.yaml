@@ -1,0 +1,14 @@
+defaults:
+  - method: lbe
+  - _self_
+
+prob: ???
+target: ???
+run_type: ???
+
+ss_len: 2000
+n_runs: 5
+data_dir: "./data/standard"
+results_dir: "./results"
+bootstrap: false
+seed: 42

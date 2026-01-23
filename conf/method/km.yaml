@@ -1,0 +1,4 @@
+name: km
+
+mpe_args:
+  stability_eps: 1e-3

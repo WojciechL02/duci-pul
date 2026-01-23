@@ -1,0 +1,9 @@
+name: threshold
+
+pul_args:
+  num_neighbors: 3
+  num_thresholds: 100
+
+method_args:
+  bins: 5
+  min_bin_count_N: 5
