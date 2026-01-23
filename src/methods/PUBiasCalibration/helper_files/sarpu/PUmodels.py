@@ -53,6 +53,7 @@ class LogisticRegressionPU(LogisticRegression, BasePU):
             warm_start=warm_start,
             n_jobs=n_jobs,
         )
+        self.multi_class = "auto"
 
     def fit(self, x, s, e=None, sample_weight=None):
         if e is None:
