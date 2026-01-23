@@ -7,22 +7,22 @@ def accuracy(true, pred):
 
 def tp(true, pred):
     return (pred * true).mean()
-    #return sum(pred[true==1])
+    # return sum(pred[true==1])
 
 
 def fp(true, pred):
     return (pred * (1 - true)).mean()
-    #return sum(pred[true==0])
+    # return sum(pred[true==0])
 
 
 def tn(true, pred):
     return ((1 - pred) * (1 - true)).mean()
-    #return sum((1-pred)[true==0])
+    # return sum((1-pred)[true==0])
 
 
 def fn(true, pred):
     return ((1 - pred) * true).mean()
-    #return sum((1-pred)[true==1])
+    # return sum((1-pred)[true==1])
 
 
 def tpfptnfn(true, pred):
@@ -61,7 +61,7 @@ def rec2_tpfptnfn(tp, fp, tn, fn):
     rec = recall_tpfptnfn(tp, fp, tn, fn)
     prp = prp_tpfptnfn(tp, fp, tn, fn)
     if prp == 0.0:
-        return float('inf')
+        return float("inf")
     return rec * rec / prp
 
 
@@ -69,16 +69,22 @@ def expected_loglikelihood(class_probabilities, propensity_scores, labels):
     prob_labeled = class_probabilities * propensity_scores
     prob_unlabeled_pos = class_probabilities * (1 - propensity_scores)
     prob_unlabeled_neg = 1 - class_probabilities
-    prob_pos_given_unl = prob_unlabeled_pos / (
-        prob_unlabeled_pos + prob_unlabeled_neg)
+    prob_pos_given_unl = prob_unlabeled_pos / (prob_unlabeled_pos + prob_unlabeled_neg)
     prob_neg_given_unl = 1 - prob_pos_given_unl
-    prob_unlabeled_pos[prob_unlabeled_pos ==
-                       0] = 0.00000001  #prevent problems of taking log
-    prob_unlabeled_neg[prob_unlabeled_neg ==
-                       0] = 0.00000001  #prevent problems of taking log
-    return (labels * np.log(prob_labeled) + (1 - labels) *
-            (prob_pos_given_unl * np.log(prob_unlabeled_pos) +
-             prob_neg_given_unl * np.log(prob_unlabeled_neg))).mean()
+    prob_unlabeled_pos[prob_unlabeled_pos == 0] = (
+        0.00000001  # prevent problems of taking log
+    )
+    prob_unlabeled_neg[prob_unlabeled_neg == 0] = (
+        0.00000001  # prevent problems of taking log
+    )
+    return (
+        labels * np.log(prob_labeled)
+        + (1 - labels)
+        * (
+            prob_pos_given_unl * np.log(prob_unlabeled_pos)
+            + prob_neg_given_unl * np.log(prob_unlabeled_neg)
+        )
+    ).mean()
 
 
 def label_frequency(class_probabilities, propensity_scores):

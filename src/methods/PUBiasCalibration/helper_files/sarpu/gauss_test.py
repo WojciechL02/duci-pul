@@ -2,7 +2,7 @@
 import torch
 
 n = 1000
-n_pos = int(n/2)
+n_pos = int(n / 2)
 
 X1_neg = torch.normal(-3, 1, size=(n_pos, 1))
 X2_neg = torch.normal(0, 1, size=(n_pos, 1))
@@ -30,14 +30,14 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 
 
 def read_names_file(filename):
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         columns = []
         while True:
             s = f.readline()
-            if s == '':
+            if s == "":
                 break
 
-            match = re.match(r'([^:]+):\s+[a-zA-Z]+\.', s)
+            match = re.match(r"([^:]+):\s+[a-zA-Z]+\.", s)
 
             if match is not None:
                 column_name = match.groups()[0]
@@ -48,22 +48,22 @@ def read_names_file(filename):
 
 def get_datasets():
     names = [
-        'Adult',
-        'BreastCancer',
-        'credit-a',
-        'credit-g',
-        'diabetes',
-        'heart-c',
-        'spambase',
-        'vote',
-        'wdbc',
+        "Adult",
+        "BreastCancer",
+        "credit-a",
+        "credit-g",
+        "diabetes",
+        "heart-c",
+        "spambase",
+        "vote",
+        "wdbc",
     ]
 
     return {name: load_dataset(name) for name in names}
 
 
 def load_dataset(name):
-    data = arff.loadarff(os.path.join(dir_path, 'data', f'{name}.arff'))
+    data = arff.loadarff(os.path.join(dir_path, "data", f"{name}.arff"))
     df = pd.DataFrame(data[0])
 
     X = df.iloc[:, :-1]
@@ -71,12 +71,13 @@ def load_dataset(name):
 
     return X.to_numpy(), y.to_numpy()
 
-X, y = load_dataset('diabetes')
-#Obtain mean of columns as you need, nanmean is convenient.
+
+X, y = load_dataset("diabetes")
+# Obtain mean of columns as you need, nanmean is convenient.
 col_mean = np.nanmean(X, axis=0)
-#Find indices that you need to replace
+# Find indices that you need to replace
 inds = np.where(np.isnan(X))
-#Place column means in the indices. Align the arrays using take
+# Place column means in the indices. Align the arrays using take
 X[inds] = np.take(col_mean, inds[1])
 
 X, y = torch.tensor(X), torch.tensor(y)
@@ -86,6 +87,7 @@ X, y
 
 # %%
 import matplotlib.pyplot as plt
+
 plt.scatter(X[:, 0], X[:, 1], c=y, s=20, edgecolor="k")
 
 # %%
@@ -127,7 +129,7 @@ plt.show()
 #     outputs = nn_clf(X)
 #     loss = criterion(torch.squeeze(outputs), y) # [200,1] -squeeze-> [200]
 
-#     loss.backward() # Computes the gradient of the given tensor w.r.t. graph leaves 
+#     loss.backward() # Computes the gradient of the given tensor w.r.t. graph leaves
 #     optimizer.step() # Updates weights and biases with the optimizer (SGD)
 
 # y_proba = nn_clf(X)
@@ -151,31 +153,40 @@ plt.show()
 
 # plt.show()
 
+
 # %%
 def eta(x, lgr_param, intercept, kappa=10):
-    return torch.pow(1 / (1 + torch.exp(-(x.double() @ lgr_param.T + intercept))), kappa)
+    return torch.pow(
+        1 / (1 + torch.exp(-(x.double() @ lgr_param.T + intercept))), kappa
+    )
+
 
 kappa = 10
 
-propensity = eta(
-        X, 
-        torch.tensor(clf.coef_, dtype=torch.double), 
+propensity = (
+    eta(
+        X,
+        torch.tensor(clf.coef_, dtype=torch.double),
         torch.tensor(clf.intercept_, dtype=torch.double),
-        kappa = kappa,
-    ).reshape(-1).double()
+        kappa=kappa,
+    )
+    .reshape(-1)
+    .double()
+)
 propensity[torch.where(y == 0)] = 0
 propensity
+
 
 # %%
 def eta(x, power=10):
     propensity_dim = x[:, 1]
-    propensity = (propensity_dim - propensity_dim.min()) / (propensity_dim.max() - propensity_dim.min())
+    propensity = (propensity_dim - propensity_dim.min()) / (
+        propensity_dim.max() - propensity_dim.min()
+    )
     return torch.pow(propensity, power)
 
-propensity = eta(
-        X, 
-        power = 4
-    ).reshape(-1).double()
+
+propensity = eta(X, power=4).reshape(-1).double()
 propensity[torch.where(y == 0)] = 0
 propensity
 
@@ -185,8 +196,8 @@ x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
 y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
 xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
 
-# Z = (eta(torch.tensor(np.c_[xx.ravel(), yy.ravel()], dtype=torch.float32), 
-#         torch.tensor(clf.coef_, dtype=torch.double), 
+# Z = (eta(torch.tensor(np.c_[xx.ravel(), yy.ravel()], dtype=torch.float32),
+#         torch.tensor(clf.coef_, dtype=torch.double),
 #         torch.tensor(clf.intercept_, dtype=torch.double),
 #         kappa = kappa))
 Z = eta(torch.tensor(np.c_[xx.ravel(), yy.ravel()], dtype=torch.float32), power=4)
@@ -227,6 +238,7 @@ s[idx] = 1
 
 # %%
 import matplotlib.pyplot as plt
+
 plt.figure(figsize=(8, 6))
 scatter = plt.scatter(X[:, 0], X[:, 1], c=s, s=20, edgecolor="k")
 legend1 = plt.legend(*scatter.legend_elements(), title="Observed")
@@ -267,14 +279,14 @@ y_pred = np.where(y_proba > 0.5, 1, 0)
 auc = metrics.roc_auc_score(y, y_proba)
 acc = metrics.accuracy_score(y, y_pred)
 
-f'ACC: {100 * acc:.2f}%, AUC: {100 * auc:.2f}%'
+f"ACC: {100 * acc:.2f}%, AUC: {100 * auc:.2f}%"
 
 # %%
 x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
 y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
 xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
 
-Z = (propensity_model.predict_proba(np.c_[xx.ravel(), yy.ravel()]))
+Z = propensity_model.predict_proba(np.c_[xx.ravel(), yy.ravel()])
 Z = Z.reshape(xx.shape)
 
 plt.contourf(xx, yy, Z, alpha=0.4)
@@ -285,6 +297,12 @@ plt.show()
 # %%
 from sarpu.experiments import evaluate_all
 
-evaluate_all(y.numpy(), s.numpy(), propensity.numpy(), classifier.predict_proba(X.numpy()), propensity_model.predict_proba(X.numpy()))
+evaluate_all(
+    y.numpy(),
+    s.numpy(),
+    propensity.numpy(),
+    classifier.predict_proba(X.numpy()),
+    propensity_model.predict_proba(X.numpy()),
+)
 
 # %%

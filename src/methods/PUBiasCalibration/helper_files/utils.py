@@ -5,8 +5,9 @@ import os
 from PIL import Image
 import torch
 
+
 # Early stopping function when training neural networks.
-class EarlyStopping():
+class EarlyStopping:
     def __init__(self, patience=5, min_delta=0, restore_best_weights=True):
         self.patience = patience
         self.min_delta = min_delta
@@ -15,7 +16,7 @@ class EarlyStopping():
         self.best_loss = None
         self.counter = 0
         self.status = ""
-    
+
     def __call__(self, model, val_loss):
         if self.best_loss == None:
             self.best_loss = val_loss
@@ -34,8 +35,9 @@ class EarlyStopping():
         self.status = f"{self.counter}/{self.patience}"
         return False
 
+
 # Label transformer for MNIST data: even vs odd.
-class label_transform_MNIST():
+class label_transform_MNIST:
     def __init__(self) -> None:
         pass
 
@@ -44,7 +46,8 @@ class label_transform_MNIST():
             return 1
         return 0
 
-class label_transform_Alzheimer():
+
+class label_transform_Alzheimer:
     def __init__(self) -> None:
         pass
 
@@ -53,49 +56,57 @@ class label_transform_Alzheimer():
             return 1
         return 0
 
+
 # Label transformer for USPS data: digits 0-4 vs 5-9.
-class label_transform_USPS():
+class label_transform_USPS:
     def __init__(self) -> None:
         pass
-        
+
     def __call__(self, target):
 
         if target in [0, 1, 2, 3, 4]:
             return 1
         return 0
 
+
 # Label transformer for Fashion-MNIST data: top vs bottom.
-class label_transform_Fashion():
+class label_transform_Fashion:
     def __init__(self) -> None:
         pass
+
     def __call__(self, target):
         if target in [0, 2, 3, 4, 6]:
             return 1
         return 0
 
+
 # Label transformer for CIFAR-10 data: transport vs animals.
-class label_transform_CIFAR10():
+class label_transform_CIFAR10:
     def __init__(self) -> None:
         pass
+
     def __call__(self, target):
         if target in [0, 1, 8, 9]:
             return 1
         return 0
-    
+
+
 def make_binary_class(y):
-    if np.unique(y).shape[0]>2:
+    if np.unique(y).shape[0] > 2:
         values, counts = np.unique(y, return_counts=True)
         ind = np.argmax(counts)
         major_class = values[ind]
         for i in np.arange(y.shape[0]):
-            if y[i]==major_class:
-                y[i]=1
+            if y[i] == major_class:
+                y[i] = 1
             else:
-                y[i]=0
+                y[i] = 0
     return y
 
+
 def sigmoid(x):
-    return 1/(1 + np.exp(-x))
+    return 1 / (1 + np.exp(-x))
+
 
 class CustomDataset(Dataset):
     def __init__(self, data_folder, transform=None, target_transform=None):
@@ -124,7 +135,7 @@ class CustomDataset(Dataset):
                     self.labels.append(self.class_to_idx[cls])
 
         for img_path in self.img_paths:
-            image = Image.open(img_path).convert('RGB')
+            image = Image.open(img_path).convert("RGB")
             image = np.array(image)
             self.images.append(image)
         # self.images = torch.tensor(self.images, dtype=torch.float32)
@@ -137,7 +148,7 @@ class CustomDataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.img_paths[idx]
         label = self.labels[idx]
-        image = Image.open(img_path).convert('RGB')  # Convert to RGB for consistency
+        image = Image.open(img_path).convert("RGB")  # Convert to RGB for consistency
 
         if self.transform:
             image = self.transform(image)
@@ -149,12 +160,11 @@ class CustomDataset(Dataset):
 
     @property
     def data(self):
-        """ Return images as a tensor. """
-        
+        """Return images as a tensor."""
+
         return self.images
 
     @property
     def targets(self):
-        """ Return labels. """
+        """Return labels."""
         return self.labels
-    

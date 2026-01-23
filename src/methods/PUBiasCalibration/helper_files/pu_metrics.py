@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.stats as st
 
+
 # ---------- PU metrics and conversion ----------
 def tpr_pu_at_threshold(scores_valid, S_valid, thr):
     """TPR_PU(thr) = sum S_i * 1[score>thr] / sum S_i over (N+U)."""
@@ -11,17 +12,21 @@ def tpr_pu_at_threshold(scores_valid, S_valid, thr):
     value = float((S_valid * m_hat).sum() / denom)
     return np.clip(value, 0.0, 1.0)
 
+
 def fpr_at_threshold(neg_scores_valid, thr):
     """FPR(thr) on known negatives only."""
     return float((neg_scores_valid > thr).mean()) if len(neg_scores_valid) else 0.0
+
 
 def tpr_nu_at_threshold(scores_valid, thr):
     """TPR_NU(thr) = mean(1[score>thr]) over all samples when only negative samples are available."""
     return float((scores_valid > thr).mean()) if len(scores_valid) else 0.0
 
+
 def fpr_nu_at_threshold(neg_scores_valid, thr):
     """FPR_NU(thr) on known negatives only. Same as fpr_at_threshold."""
     return fpr_at_threshold(neg_scores_valid, thr)
+
 
 def convert_tpr_pu_to_true(TPR_PU, FPR, pi_hat, S_P_hat, S_N_hat):
     """
@@ -30,7 +35,7 @@ def convert_tpr_pu_to_true(TPR_PU, FPR, pi_hat, S_P_hat, S_N_hat):
       b = ((1-pi)*S_N) / (pi*S_P + (1-pi)*S_N)
     => TPR = (TPR_PU - b*FPR) / a
     """
-    denom = (pi_hat * S_P_hat + (1 - pi_hat) * S_N_hat)
+    denom = pi_hat * S_P_hat + (1 - pi_hat) * S_N_hat
     if denom <= 1e-12:
         raise ValueError("Denominator for (a,b) ~ 0; check pi_hat/S_P_hat/S_N_hat.")
     a = (pi_hat * S_P_hat) / denom
@@ -39,6 +44,7 @@ def convert_tpr_pu_to_true(TPR_PU, FPR, pi_hat, S_P_hat, S_N_hat):
         raise ValueError("Coefficient 'a' ~ 0; cannot invert TPR_PU -> TPR.")
     TPR = (TPR_PU - b * FPR) / a
     return float(TPR), float(a), float(b)
+
 
 def convert_tpr_nu_to_true(TPR_NU, FPR, pi_hat):
     """
@@ -49,6 +55,7 @@ def convert_tpr_nu_to_true(TPR_NU, FPR, pi_hat):
         raise ValueError("pi_hat ~ 0; cannot invert TPR_NU -> TPR.")
     TPR = (TPR_NU - (1 - pi_hat) * FPR) / pi_hat
     return float(TPR)
+
 
 def estimate_class_prior(scores, neg_scores, simple_mean=True):
     """
@@ -78,6 +85,7 @@ def estimate_class_prior(scores, neg_scores, simple_mean=True):
 
     # Interpolate negative CDF to match all scores
     from scipy.interpolate import interp1d
+
     f_neg = interp1d(sorted_neg_scores, cdf_neg, bounds_error=False, fill_value=(0, 1))
     neg_cdf_interp = f_neg(sorted_scores)
 
@@ -99,19 +107,32 @@ def choose_threshold(scores_valid, neg_scores_valid, S_valid, pi_hat, S_P_hat, S
     if len(thresholds) > 500:
         thresholds = np.quantile(scores_valid, np.linspace(0, 1, 501))
 
-    best = {"thr": None, "J": -np.inf, "TPR": None, "FPR": None, "a": None, "b": None, "TPR_PU": None}
+    best = {
+        "thr": None,
+        "J": -np.inf,
+        "TPR": None,
+        "FPR": None,
+        "a": None,
+        "b": None,
+        "TPR_PU": None,
+    }
     for thr in thresholds:
         FPR = fpr_at_threshold(neg_scores_valid, thr)
         TPR_PU = tpr_pu_at_threshold(scores_valid, S_valid, thr)
         TPR, a, b = convert_tpr_pu_to_true(TPR_PU, FPR, pi_hat, S_P_hat, S_N_hat)
         J = TPR - FPR
         if J > best["J"]:
-            best = {"thr": float(thr), "J": float(J), "TPR": float(np.clip(TPR, 0.0, 1.0)), "FPR": float(FPR),
-                    "a": a,
-                    "b": b,
-                    "TPR_PU": float(TPR_PU)
-                    }
+            best = {
+                "thr": float(thr),
+                "J": float(J),
+                "TPR": float(np.clip(TPR, 0.0, 1.0)),
+                "FPR": float(FPR),
+                "a": a,
+                "b": b,
+                "TPR_PU": float(TPR_PU),
+            }
     return best
+
 
 def choose_threshold_nu(scores_valid, neg_scores_valid, pi_hat):
     """Sweep thresholds with only negative samples; pick argmax of J = TPR - FPR."""
@@ -126,10 +147,15 @@ def choose_threshold_nu(scores_valid, neg_scores_valid, pi_hat):
         TPR = convert_tpr_nu_to_true(TPR_NU, FPR, pi_hat)
         J = TPR - FPR
         if J > best["J"]:
-            best = {"thr": float(thr), "J": float(J), "TPR": float(np.clip(TPR, 0.0, 1.0)), "FPR": float(FPR),
-                    "TPR_NU": float(TPR_NU)
-                    }
+            best = {
+                "thr": float(thr),
+                "J": float(J),
+                "TPR": float(np.clip(TPR, 0.0, 1.0)),
+                "FPR": float(FPR),
+                "TPR_NU": float(TPR_NU),
+            }
     return best
+
 
 # ---------- DUCI debiasing ----------
 def debias_target(target_scores, thr, TPR, FPR, alpha=0.05):
@@ -152,6 +178,7 @@ def debias_target(target_scores, thr, TPR, FPR, alpha=0.05):
         "ci_high": float(p_hat + half),
     }
 
+
 def estimate_p_and_debias(target_scores, neg_scores, alpha=0.05):
     """Estimate p (class prior) and perform debiasing with only negative samples."""
     # Estimate class prior
@@ -173,7 +200,7 @@ def estimate_p_and_debias(target_scores, neg_scores, alpha=0.05):
         thresholds = np.quantile(target_scores, np.linspace(0, 1, 501))
 
     best_thr = None
-    best_fpr = float('inf')
+    best_fpr = float("inf")
 
     for thr in thresholds:
         fpr = fpr_nu_at_threshold(neg_scores, thr)
@@ -191,4 +218,3 @@ def estimate_p_and_debias(target_scores, neg_scores, alpha=0.05):
     result["lowerbound"] = float(lowerbound_result["p_hat"])
 
     return result
-

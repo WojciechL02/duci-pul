@@ -19,19 +19,21 @@ def seed(seed):
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
 
+
 class PUthreshold(BaseEstimator):
     """
     The implementation of our NTC-tMI model.
     """
-    def __init__(self):
+
+    def __init__(self, num_neighbors: int = 3, num_thresholds: int = 100):
         """
         Initializes the threshold model.
         """
         base_estimator = LogisticRegression(max_iter=1000)
         self.clf = OneVsRestClassifier(base_estimator)
         self.topt = None
-
-
+        self.num_neighbors = num_neighbors
+        self.num_thresholds = num_thresholds
 
     def fit(self, X, s):
         """
@@ -45,18 +47,18 @@ class PUthreshold(BaseEstimator):
             The observed labels of the data.
         """
 
-        self.clf.fit(X,s)
-        sx = self.clf.predict_proba(X)[:,1]
+        self.clf.fit(X, s)
+        sx = self.clf.predict_proba(X)[:, 1]
 
-        sx[np.where(sx==1)] = 0.999
-        sx[np.where(sx==0)] = 0.001
+        sx[np.where(sx == 1)] = 0.999
+        sx[np.where(sx == 0)] = 0.001
 
-        lin_pred = np.log(sx/(1-sx))
+        lin_pred = np.log(sx / (1 - sx))
 
-        w0 = np.where(s==0)[0]
+        w0 = np.where(s == 0)[0]
         lin_pred0 = lin_pred[w0]
 
-        to = ThresholdOptimizer(k=3, n=100)
+        to = ThresholdOptimizer(k=self.num_neighbors, n=self.num_thresholds)
         t_opt = to.find_threshold(lin_pred0)
 
         self.topt = t_opt
@@ -71,7 +73,7 @@ class PUthreshold(BaseEstimator):
         X : numpy.ndarray
             The data to predict the labels of.
         """
-        return np.where(self.predict_proba(X)>0.5,1,0) 
+        return np.where(self.predict_proba(X) > 0.5, 1, 0)
 
     def predict_proba(self, Xtest):
         """
@@ -82,17 +84,19 @@ class PUthreshold(BaseEstimator):
         Xtest : numpy.ndarray
             The data to predict the probabilities of.
         """
-        sx_test = self.clf.predict_proba(Xtest)[:,1]
-        sx_test[np.where(sx_test==0)]=0.01
-        sx_test[np.where(sx_test==1)]=0.99
-        z_test = np.log(sx_test/(1-sx_test))
+        sx_test = self.clf.predict_proba(Xtest)[:, 1]
+        sx_test[np.where(sx_test == 0)] = 0.01
+        sx_test[np.where(sx_test == 1)] = 0.99
+        z_test = np.log(sx_test / (1 - sx_test))
         yx_test = sigmoid(z_test - self.topt)
-        return np.array(list(zip(1 - yx_test, yx_test))) 
+        return np.column_stack((1 - yx_test, yx_test))
+
 
 class PUthresholddeep(nn.Module):
     """
     The implementation of our NTC-tMI model using deep PyTorch models.
     """
+
     def __init__(self, clf, dims=None, device=0) -> None:
         """
         Initializes the threshold model.
@@ -107,19 +111,27 @@ class PUthresholddeep(nn.Module):
             The device to use for training.
         """
         super().__init__()
-        self.device = "mps" if getattr(torch, 'has_mps', False) else "cuda:{}".format(device) if torch.cuda.is_available() else "cpu"
+        self.device = (
+            "mps"
+            if getattr(torch, "has_mps", False)
+            else "cuda:{}".format(device) if torch.cuda.is_available() else "cpu"
+        )
         print(f"Using device: {self.device}")
 
-        if clf == 'lr' or clf == 'mlp':
-            assert dims != None, 'Classifier type {} requires specifying the dimensionality of the data.'.format(clf)
+        if clf == "lr" or clf == "mlp":
+            assert (
+                dims != None
+            ), "Classifier type {} requires specifying the dimensionality of the data.".format(
+                clf
+            )
 
-        if clf == 'lr':
+        if clf == "lr":
             self.ntc = LR(dims=dims).to(self.device)
-        elif clf == 'mlp':
+        elif clf == "mlp":
             self.ntc = MLPReLU(dims=dims).to(self.device)
-        elif clf == 'cnn':
+        elif clf == "cnn":
             self.ntc = FullCNN().to(self.device)
-        elif clf == 'resnet':
+        elif clf == "resnet":
             self.ntc = Resnet().to(self.device)
 
         self.threshold = None
@@ -133,7 +145,9 @@ class PUthresholddeep(nn.Module):
         x : torch.Tensor
             The data to predict the probabilities of.
         """
-        assert self.threshold != None, 'The model has to be fit before predictions can be made.'
+        assert (
+            self.threshold != None
+        ), "The model has to be fit before predictions can be made."
         with torch.no_grad():
             scores = self.ntc(x, probabilistic=False)
             thresholded_scores = scores - self.threshold
@@ -159,15 +173,13 @@ class PUthresholddeep(nn.Module):
                 inputs_unlabeled = inputs[labels == 0]
                 unlabeled_length = len(inputs_unlabeled)
                 z_ = self.ntc(inputs_unlabeled, probabilistic=False).squeeze().detach()
-                z_unlabeled[j:j + unlabeled_length] = z_
+                z_unlabeled[j : j + unlabeled_length] = z_
                 j += unlabeled_length
-
 
         z_unlabeled = z_unlabeled[:j].cpu().numpy()
 
         to = ThresholdOptimizer(k=3, n=1000)
         self.threshold = torch.tensor(to.find_threshold(z_unlabeled)).to(self.device)
-
 
     def fit(self, trainloader, valloader, epochs, lr=1e-3):
         """
@@ -207,16 +219,20 @@ class PUthresholddeep(nn.Module):
                     v_loss = 0
 
                     for j, val_data in enumerate(valloader):
-                        inputs, labels = val_data[0].to(self.device), val_data[1].to(self.device)
+                        inputs, labels = val_data[0].to(self.device), val_data[1].to(
+                            self.device
+                        )
                         pred_y = self.ntc(inputs, probabilistic=False)
                         v_loss += criterion(pred_y, labels.unsqueeze(1).float()).item()
 
-                    v_loss = v_loss/(j + 1)
+                    v_loss = v_loss / (j + 1)
 
                     if es(self.ntc, v_loss):
                         done = True
 
-                    pbar.set_description(f"Epoch: {epoch}, tloss: {loss}, vloss: {v_loss:>7f}, EStop:[{es.status}]")
+                    pbar.set_description(
+                        f"Epoch: {epoch}, tloss: {loss}, vloss: {v_loss:>7f}, EStop:[{es.status}]"
+                    )
 
                 else:
                     pbar.set_description(f"Epoch: {epoch}, tloss: {loss:}")
