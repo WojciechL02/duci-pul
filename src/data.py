@@ -151,8 +151,8 @@ def prepare_data(
         control_name = (
             "ControlSEnsemble_coco" if "uvit" in name else "ControlSEnsemble_in"
         )
-        mem, nonmem = load_files(control_name, "ae")
-        synth_mem, synth_nonmem = load_files(control_name, "from")
+        mem, nonmem = load_files(control_name, "ae", data_dir)
+        synth_mem, synth_nonmem = load_files(control_name, "from", data_dir)
         X_ctrl_ae_mem = load_npz(mem)
         X_ctrl_ae_nonmem = load_npz(nonmem)
         X_ctrl_mem_generated = load_npz(synth_mem)

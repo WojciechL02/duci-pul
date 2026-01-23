@@ -154,10 +154,10 @@ class PULBased:
             X_comb = np.hstack([X_ctrl, X_data])
 
             start_time = time.perf_counter()
-            model_ctrl = self.pul(self.pul_args)
+            model_ctrl = PULWithPrior(self.pul(**self.pul_args), **self.method_args)
             model_ctrl.fit(X_ctrl, s_data)
 
-            model_comb = self.pul(self.pul_args)
+            model_comb = PULWithPrior(self.pul(**self.pul_args), **self.method_args)
             model_comb.fit(X_comb, s_data)
             run_time = time.perf_counter() - start_time
 
