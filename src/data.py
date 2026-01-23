@@ -15,7 +15,7 @@ def load_npz(path):
 
 
 def load_files(prefix: str, data_type: str, data_dir: str):
-    folder = Path(f"../{data_dir}")
+    folder = Path(data_dir)
     mem_pattern = f"{prefix}_*{data_type}*_mem*.npz"
     nonmem_pattern = f"{prefix}_*{data_type}*_nonmem*.npz"
     if data_type == "from":

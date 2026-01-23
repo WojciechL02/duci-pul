@@ -1,7 +1,17 @@
 import os
+import torch
 import numpy as np
 import pandas as pd
 from scipy.stats import binom, beta
+
+
+def seed_everything(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
 
 
 def safe_logit(p):
@@ -99,7 +109,7 @@ def no_positives_test(
     }
 
 
-def save_results(records: list, metrics: list, results_dir: str, metadata: dict):
+def save_results(records: list, metrics: list, results_dir: str, metadata):
     df = pd.DataFrame(records)
     agg = df.groupby("method")[metrics].agg(["min", "mean", "std", "max"])
 
@@ -113,20 +123,28 @@ def save_results(records: list, metrics: list, results_dir: str, metadata: dict)
         rows.append(row)
 
     formatted = pd.DataFrame(rows)
+    os.makedirs(results_dir, exist_ok=True)
 
-    if not os.path.exists(results_dir):
-        os.makedirs(results_dir)
+    model_name = metadata.target
+    if metadata.method.name == "km":
+        filename = f"km_{model_name}_{metadata.run_type}_len{metadata.ss_len}_p={metadata.prob}.csv"
+    else:
+        pul_args = "_"
+        if len(metadata.method.pul_args) > 0:
+            pul_args = (
+                "_"
+                + "_".join(f"{k}={v}" for k, v in metadata.method.pul_args.items())
+                + "_"
+            )
+        filename = f"{metadata.method.name}_{model_name}_{metadata.run_type}_len{metadata.ss_len}_bins{metadata.method.method_args.bins}{pul_args}p={metadata.prob}.csv"
 
-    model_name = (
-        metadata["name"].split("/")[1] if "/" in metadata["name"] else metadata["name"]
-    )
     formatted.to_csv(
-        f"{results_dir}/results_lbe_prior_{model_name}_{metadata['run_type']}_len{metadata['ss_len']}_bins{metadata['bins']}_lbe{metadata['lbe_model']}_p={metadata['p']}.csv",
+        os.path.join(results_dir, filename),
         index=False,
         sep="\t",
     )
     df.to_csv(
-        f"{results_dir}/results_lbe_prior_full_{model_name}_{metadata['run_type']}_len{metadata['ss_len']}_bins{metadata['bins']}_lbe{metadata['lbe_model']}_p={metadata['p']}.csv",
+        os.path.join(results_dir, filename),
         index=False,
         sep="\t",
     )
@@ -134,9 +152,10 @@ def save_results(records: list, metrics: list, results_dir: str, metadata: dict)
 
 
 def print_summary(df, config):
-    print(f"\nTrue p: {config['p']:.4f}")
-    print(40 * "-")
-    if config["run_type"] == "correction":
+    print("\nSUMMARY:")
+    print(100 * "-")
+    print(f"True p: {config.prob:.4f}")
+    if config.run_type == "correction":
         print(
             f"p_hat_comb: {df['p_hat_comb'].mean():.3f} ± {df['p_hat_comb'].std():.2f}"
         )
@@ -150,4 +169,4 @@ def print_summary(df, config):
             f"p_hat_MIA-ctrl: {df['p_hat_MIA-ctrl'].mean():.3f} ± {df['p_hat_MIA-ctrl'].std():.2f}"
         )
     print(f"p_hat_test: {df['p_hat_test'].mean():.3f} ± {df['p_hat_test'].std():.2f}")
-    print(40 * "-")
+    print(100 * "-")
