@@ -220,12 +220,11 @@ def create_individual_model_plots(
         # save
         # Create a filename that includes the filtering parameters
         filter_parts = []
-        if ss_len:
-            filter_parts.append(f"ss_len={'-'.join(map(str, ss_len))}")
+        filter_parts.append(f"model={target}")
         if run_type:
-            filter_parts.append(f"run_type={'-'.join(run_type)}")
-        if models:
-            filter_parts.append(f"models={'-'.join(models)}")
+            filter_parts.append(f"{'-'.join(run_type)}")
+        if ss_len:
+            filter_parts.append(f"{'-'.join(map(str, ss_len))}")
 
         filter_suffix = "_".join(filter_parts)
         if filter_suffix:
@@ -236,13 +235,13 @@ def create_individual_model_plots(
             results_dir,
             "single",
             target,
-            f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.png",
+            f"single_{model_key}{filter_suffix}{suffix}.png",
         )
         out_pdf = os.path.join(
             results_dir,
             "single",
             target,
-            f"p_hat_test_single_{model_key}{filter_suffix}{suffix}.pdf",
+            f"single_{model_key}{filter_suffix}{suffix}.pdf",
         )
         os.makedirs(os.path.dirname(out_png), exist_ok=True)
 
@@ -420,12 +419,11 @@ def create_grid_plot(
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.15)  # Make room for the legend
     filter_parts = []
-    if ss_len:
-        filter_parts.append(f"ss_len={'-'.join(map(str, ss_len))}")
+    filter_parts.append(f"model={target}")
     if run_type:
-        filter_parts.append(f"run_type={'-'.join(run_type)}")
-    if models:
-        filter_parts.append(f"models={'-'.join(models)}")
+        filter_parts.append(f"{'-'.join(run_type)}")
+    if ss_len:
+        filter_parts.append(f"{'-'.join(map(str, ss_len))}")
 
     filter_suffix = "_".join(filter_parts)
     if filter_suffix:
@@ -437,13 +435,13 @@ def create_grid_plot(
         results_dir,
         "grid",
         target,
-        f"p_hat_test_grid_{model_name}{filter_suffix}{suffix}.png",
+        f"grid_{model_name}{filter_suffix}{suffix}.png",
     )
     output_pdf = os.path.join(
         results_dir,
         "grid",
         target,
-        f"p_hat_test_grid_{model_name}{filter_suffix}{suffix}.pdf",
+        f"grid_{model_name}{filter_suffix}{suffix}.pdf",
     )
     os.makedirs(os.path.dirname(output_png), exist_ok=True)
 
