@@ -58,7 +58,7 @@ parser.add_argument(
     "--ss_len",
     type=int,
     nargs="+",
-    default=[500],
+    default=[200, 500, 2000],
     help="Filter results by suspect set length(s) (e.g., 100 500 1000 1500)",
 )
 parser.add_argument(
@@ -524,19 +524,14 @@ def create_plots_for_model(
         print(f"No files match the specified criteria in {results_dir}.")
         return
 
-    # Group files by model, ss_len, model_type, and bins
+    # Group files by parameters
     model_files = defaultdict(dict)
     for file in results_files:
         file_data = parse_filename(file)
-        if file_data["target"]:
-            # Create a key based on available information
-            # if file_data["ss_len"] is not None:
-            key = f"{file_data['target']}_{file_data['ss_len']}_{file_data['method']}_{file_data['method_args']}"
-            # else:
-            #     key = file_data["target"]
-            if key not in model_files[file_data["target"]]:
-                model_files[file_data["target"]][key] = []
-            model_files[file_data["target"]][key].append(file)
+        key = f"{file_data['target']}_{file_data['ss_len']}_{file_data['method']}_{file_data['method_args']}"
+        if key not in model_files[file_data["target"]]:
+            model_files[file_data["target"]][key] = []
+        model_files[file_data["target"]][key].append(file)
 
     # Print model files for debugging
     num_models = len(model_files)
