@@ -319,8 +319,8 @@ def create_grid_plot(
 
                 elif _run_type_ == "correction":
                     if "p_hat_2MIA-comb" in df.columns:
-                        mean = df["p_hat_test"].mean()
-                        std = df["p_hat_test"].std()
+                        mean = df["p_hat_2MIA-comb"].mean()
+                        std = df["p_hat_2MIA-comb"].std()
 
                 metric_data[_run_type_]["p"].append(p)
                 metric_data[_run_type_]["m"].append(mean)
