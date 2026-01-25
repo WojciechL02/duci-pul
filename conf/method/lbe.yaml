@@ -1,12 +1,12 @@
 name: lbe
 
 pul_args:
-  pretraining_epochs: 100
-  epochs: 30
-  m_steps: 20
-  pretraining_lr: 1e-3
+  pretraining_epochs: 50
+  epochs: 50
+  m_steps: 25
+  pretraining_lr: 1e-2
   lr: 1e-4
-  kind: LR
+  kind: MLP
 
 method_args:
   bins: 5
