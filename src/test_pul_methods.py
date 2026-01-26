@@ -34,7 +34,7 @@ METHODS_MAPPING = {
     "pusb": "PUSB~\citep{kato2018pusb}",
     "pglin": "PGLIN~\citep{gerych2022recovering}",
     "lbe": "LBE~\citep{gong2021lbe}",
-    "pue": "PUe~\citep{}",
+    "pue": "PUe~\citep{wang2023pue}",
 }
 
 METHODS_ORDER = [
