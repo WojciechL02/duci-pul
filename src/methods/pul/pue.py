@@ -6,9 +6,12 @@ from .km import KM
 
 
 class PUe(BaseEstimator):
-    def __init__(self):
+    def __init__(self, lr: float = 1e-3, epochs: int = 20):
+        self.lr = lr
+        self.epochs = epochs
         self.e = None
         self.clf = None
+        self.alpha = 15  # alpha=15 as recommended in the original paper
 
     def fit(self, X, s):
         """
@@ -32,8 +35,8 @@ class PUe(BaseEstimator):
         s = torch.from_numpy(s).float()
         self.e = nn.Linear(X.shape[1], 1)
         criterion = LossE(
-            n_p=torch.sum(s), n_U=s.shape[0] - torch.sum(s), alpha=15
-        )  # Alpha=15 as recommended in the original paper.
+            n_p=torch.sum(s), n_U=s.shape[0] - torch.sum(s), alpha=self.alpha
+        )
         optimizer = torch.optim.Adam(self.e.parameters(), lr=1e-3)
 
         for epoch in range(20):
@@ -51,9 +54,9 @@ class PUe(BaseEstimator):
 
         self.clf = nn.Linear(X.shape[1], 1)
         criterion = LossCLF(pi=est_pi)
-        optimizer = torch.optim.Adam(self.clf.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.lr)
 
-        for epoch in range(20):
+        for epoch in range(self.epochs):
             optimizer.zero_grad()
             outputs = self.clf(X)
             loss = criterion(outputs, s, normalized_prop_scores)
