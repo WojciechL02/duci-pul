@@ -8,3 +8,5 @@ from .threshold import PUThreshold
 from .km import KM
 from .tice import TICE
 from .dedpul import DEDPUL
+from .sumpe import SuMPE
+from .alphamax import AlphaMax
