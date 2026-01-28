@@ -2,8 +2,8 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from sklearn.linear_model import LinearRegression
 from typing import Dict
-from km import KM
-from tice import TICE
+from .km import KM
+from .tice import TICE
 
 
 class BestBin:
