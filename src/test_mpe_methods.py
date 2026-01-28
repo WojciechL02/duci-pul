@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 import numpy as np
 import pandas as pd
 from collections import defaultdict
@@ -11,6 +12,8 @@ from methods.pul import (
     KM,
     TICE,
     DEDPUL,
+    SuMPE,
+    AlphaMax,
 )
 
 
@@ -34,6 +37,7 @@ METHODS_MAPPING = {
     "tice": "TICE~\citep{bekker2018tice}",
     "dedpul": r"DEDPUL~\citep{ivanov2020dedpul}",
     "sumpe": r"SuMPE~\citep{zhu2023sumpe}",
+    "alphamax": r"AlphaMax~\citep{jain2016alphamax}",
 }
 
 COLOR_MAPPING = {
@@ -41,9 +45,10 @@ COLOR_MAPPING = {
     "tice": "green",
     "dedpul": "blue",
     "sumpe": "orange",
+    "alphamax": "purple",
 }
 
-RAW_METHODS_ORDER = ["km", "tice", "dedpul", "sumpe"]
+RAW_METHODS_ORDER = ["km", "tice", "dedpul", "sumpe", "alphamax"]
 
 
 def calculate_metrics_df(records: dict) -> pd.DataFrame:
@@ -261,7 +266,7 @@ def run_experiment(methods, name, nsym, p, ss_len, data_type, results_dir, data_
             seed_everything(int(sym))
 
             if method == "km":
-                km_estimator = KM()
+                km_estimator = KM(stability_eps=1e-2)
                 est = km_estimator.estimate(X_train, s_train)
                 est["alpha"] = 1 - est["alpha"]
             elif method == "tice":
@@ -271,7 +276,14 @@ def run_experiment(methods, name, nsym, p, ss_len, data_type, results_dir, data_
                 dedpul_estimator = DEDPUL()
                 est = dedpul_estimator.estimate(X_train, s_train)
             elif method == "sumpe":
-                est = {"alpha": 0.0}
+                estimator = SuMPE(
+                    base_estimator="km", base_estimator_kwargs={"stability_eps": 1e-2}
+                )
+                est = estimator.estimate(X_train, s_train)
+            elif method == "alphamax":
+                estimator = AlphaMax()
+                est = estimator.estimate(X_train, s_train)
+                est["alpha"] = 1 - est["alpha"]
             else:
                 raise ValueError(f"No known method {method}")
 
@@ -290,6 +302,7 @@ def main():
             "tice",
             "dedpul",
             "sumpe",
+            "alphamax",
         ],
         required=False,
         help="MPE methods to compare",
@@ -334,6 +347,7 @@ def main():
     records = {}
     for p in [0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
         print(f"Running p={p}...")
+        st = time.perf_counter()
         single_records = run_experiment(
             args.methods,
             args.target,
@@ -345,6 +359,8 @@ def main():
             args.data_dir,
         )
         records[p] = single_records
+        et = time.perf_counter()
+        print(f"Time: {et-st:.1f}(s)")
 
     save_paper_table(records, f"{args.target}", args.results_dir)
     print("Done!")
