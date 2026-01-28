@@ -15,6 +15,7 @@ from methods.pul import (
     SuMPE,
     AlphaMax,
 )
+import concurrent.futures
 
 
 plt.rcParams.update(
@@ -344,23 +345,58 @@ def main():
             "data_dir": args.data_dir,
         }
     )
+    # records = {}
+    # for p in [0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
+    #     print(f"Running p={p}...")
+    #     st = time.perf_counter()
+    #     single_records = run_experiment(
+    #         args.methods,
+    #         args.target,
+    #         args.n_runs,
+    #         p,
+    #         args.ss_len,
+    #         args.data_type,
+    #         args.results_dir,
+    #         args.data_dir,
+    #     )
+    #     records[p] = single_records
+    #     et = time.perf_counter()
+    #     print(f"Time: {et-st:.1f}(s)")
+    #
+    # save_paper_table(records, f"{args.target}", args.results_dir)
+    # print("Done!")
+
+    p_values = [0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
     records = {}
-    for p in [0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
-        print(f"Running p={p}...")
-        st = time.perf_counter()
-        single_records = run_experiment(
-            args.methods,
-            args.target,
-            args.n_runs,
-            p,
-            args.ss_len,
-            args.data_type,
-            args.results_dir,
-            args.data_dir,
-        )
-        records[p] = single_records
-        et = time.perf_counter()
-        print(f"Time: {et-st:.1f}(s)")
+    print(f"Starting parallel execution on {len(p_values)} tasks...")
+    global_start = time.perf_counter()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=16) as executor:
+        future_to_p = {
+            executor.submit(
+                run_experiment,
+                args.methods,
+                args.target,
+                args.n_runs,
+                p,
+                args.ss_len,
+                args.data_type,
+                args.results_dir,
+                args.data_dir,
+            ): p
+            for p in p_values
+        }
+
+        for future in concurrent.futures.as_completed(future_to_p):
+            p = future_to_p[future]
+            try:
+
+                single_records = future.result()
+                records[p] = single_records
+                print(f"Finished p={p}")
+            except Exception as exc:
+                print(f"p={p} generated an exception: {exc}")
+    global_end = time.perf_counter()
+    print(f"Total time: {global_end - global_start:.1f}(s)")
 
     save_paper_table(records, f"{args.target}", args.results_dir)
     print("Done!")
