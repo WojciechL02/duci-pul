@@ -7,7 +7,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 from data import prepare_data
 from utils import seed_everything
-from methods.pul import (
+from methods.algorithms import (
     KM,
     TICE,
     DEDPUL,
