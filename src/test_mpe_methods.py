@@ -266,7 +266,7 @@ def run_experiment(methods, name, nsym, p, ss_len, data_type, data_dir):
             seed_everything(sym)
 
             if method == "km":
-                km_estimator = KM(stability_eps=1e-2)
+                km_estimator = KM(stability_eps=1e-9)
                 est = km_estimator.estimate(X_data, s_data)
                 est["alpha"] = 1 - est["alpha"]
             elif method == "tice":
@@ -277,7 +277,7 @@ def run_experiment(methods, name, nsym, p, ss_len, data_type, data_dir):
                 est = dedpul_estimator.estimate(X_data, s_data)
             elif method == "sumpe":
                 estimator = SuMPE(
-                    base_estimator="km", base_estimator_kwargs={"stability_eps": 1e-2}
+                    base_estimator="km", base_estimator_kwargs={"stability_eps": 1e-9}
                 )
                 est = estimator.estimate(X_data, s_data)
             elif method == "alphamax":
@@ -345,7 +345,7 @@ def main():
         }
     )
     # records = {}
-    # for p in [0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
+    # for p in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
     #     print(f"Running p={p}...")
     #     st = time.perf_counter()
     #     single_records = run_experiment(
@@ -360,7 +360,7 @@ def main():
     #     records[p] = single_records
     #     et = time.perf_counter()
     #     print(f"Time: {et-st:.1f}(s)")
-
+    #
     # save_paper_table(records, f"{args.target}", args.results_dir)
     # print("Done!")
 
