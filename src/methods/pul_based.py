@@ -35,6 +35,7 @@ class PULWithPrior(BaseEstimator):
         min_bin_count_U=1,
         proba_index=1,
         device=0,
+        show_histogram=False,
     ):
         self.method = method
         self.bins = bins
@@ -43,6 +44,7 @@ class PULWithPrior(BaseEstimator):
         self.min_bin_count_N = min_bin_count_N
         self.min_bin_count_U = min_bin_count_U
         self.proba_index = proba_index
+        self.show_histogram = show_histogram
         self.device = f"cuda:{device}" if torch.cuda.is_available() else "cpu"
         self.model = None
         self.pi = None  # estimated prevalence on the last fit() dataset
@@ -94,6 +96,7 @@ class PULWithPrior(BaseEstimator):
             min_bin_count_N=self.min_bin_count_N,
             min_bin_count_U=self.min_bin_count_U,
             relax=self.relax,
+            show_histogram=self.show_histogram,
         )
         return p_hat
 
@@ -116,6 +119,7 @@ class PULWithPrior(BaseEstimator):
             min_bin_count_N=self.min_bin_count_N,
             min_bin_count_U=self.min_bin_count_U,
             relax=self.relax,
+            show_histogram=self.show_histogram,
         )
 
 
