@@ -31,7 +31,9 @@ def load_files(prefix: str, data_type: str, data_dir: str):
 def load_data(name: str, data_type: str, data_dir: str):
     mem_match, nonmem_match = load_files(name, data_type, data_dir)
     members = load_npz(mem_match)
+    members = np.unique(members, axis=0)
     nonmembers = load_npz(nonmem_match)
+    nonmembers = np.unique(nonmembers, axis=0)
     return members, nonmembers
 
 
