@@ -100,7 +100,7 @@ class TICE:
             c_its_ests.append(c_estimates)
 
         alpha = self.tice_c_to_alpha(c_estimate, gamma)
-        return {"alpha": alpha}
+        return {"alpha": 1.0 - alpha}
 
     def tice_c_to_alpha(self, c, gamma):
         return max(0.0, 1 - (1 - gamma) * (1 - c) / gamma / c)

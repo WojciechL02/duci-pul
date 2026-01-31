@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import numpy as np
 from scipy import optimize
+from scipy.special import expit
 from sklearn.base import BaseEstimator
 
 
@@ -139,7 +140,8 @@ class PULinearKernel:
         n1 = len(xp)
         n0 = len(xu)
         g = np.dot(xu, b)
-        z = 1 / (1 + np.exp(-g))
+        # z = 1 / (1 + np.exp(-g))
+        z = expit(g)
         dg = np.sum(xp, axis=0) / n1
         grad = -self.pi * dg + np.dot(z.T, xu) / n0 + reg * b
         return grad

@@ -27,8 +27,14 @@ class PUe(BaseEstimator):
         # Estimate class prior
         X_mixture = X[np.where(s == 0)[0], :]
         X_component = X[np.where(s == 1)[0], :]
-        km_estimator = KM()
-        est = km_estimator.estimate(X_mixture, X_component)
+        if len(X_mixture) > 500:
+            X_km_mix = X_mixture[:500]
+            X_km_com = X_component[:500]
+        else:
+            X_km_mix = X_mixture
+            X_km_com = X_component
+        km_estimator = KM(stability_eps=1e-3)
+        est = km_estimator.estimate(X_km_mix, X_km_com)
         est_pi = (1 - np.mean(s)) * est["km2"] + np.mean(s)
 
         X = torch.from_numpy(X).float()

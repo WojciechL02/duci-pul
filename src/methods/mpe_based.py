@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from .pul import KM, TICE
+from .algorithms import KM, TICE
 
 
 METHOD_REGISTRY = {"km": KM, "tice": TICE}

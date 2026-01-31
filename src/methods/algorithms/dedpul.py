@@ -106,7 +106,7 @@ class DEDPUL:
             diff = self.estimate_diff(preds, y)
 
         alpha, _ = self.estimate_poster_em(diff=diff, mode="dedpul", alpha=None)
-        return {"alpha": float(alpha)}
+        return {"alpha": 1.0 - float(alpha)}
 
     def estimate_poster_em(
         self,

@@ -99,6 +99,7 @@ class KM:
 
         # Find best kernel width
         max_dist_RKHS = 0
+        best_kernel_width = None
         for kernel_width in kernel_width_vals:
             kernel = np.exp(-distance_sqd_matrix / (2.0 * kernel_width**2.0))
             dist_diff = np.concatenate((np.ones((N, 1)) / N, -1 * np.ones((M, 1)) / M))
@@ -108,6 +109,8 @@ class KM:
             if distribution_RKHS_distance > max_dist_RKHS:
                 max_dist_RKHS = distribution_RKHS_distance
                 best_kernel_width = kernel_width
+        if best_kernel_width is None:
+            best_kernel_width = kernel_width_vals[len(kernel_width_vals) // 2]
         kernel = np.exp(-distance_sqd_matrix / (2.0 * best_kernel_width**2.0))
         return best_kernel_width, kernel
 

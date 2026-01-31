@@ -4,7 +4,7 @@ import torch
 from sklearn.base import BaseEstimator
 from typing import Dict
 from .utils import nu_estimate_p_robust, no_positives_test
-from .pul import LBE, SAREM, PGlin, PUe, PUSB, PUThreshold
+from .algorithms import LBE, SAREM, PGlin, PUe, PUSB, PUThreshold
 
 
 METHOD_REGISTRY = {
