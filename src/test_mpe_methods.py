@@ -268,7 +268,6 @@ def run_experiment(methods, name, nsym, p, ss_len, data_type, data_dir):
             if method == "km":
                 km_estimator = KM(stability_eps=1e-9)
                 est = km_estimator.estimate(X_data, s_data)
-                est["alpha"] = 1 - est["alpha"]
             elif method == "tice":
                 tice_estimator = TICE()
                 est = tice_estimator.estimate(X_data, s_data)
@@ -283,17 +282,16 @@ def run_experiment(methods, name, nsym, p, ss_len, data_type, data_dir):
             elif method == "alphamax":
                 estimator = AlphaMax()
                 est = estimator.estimate(X_data, s_data)
-                est["alpha"] = 1 - est["alpha"]
             elif method == "pul":
                 estimator = PULBased(
                     "lbe", {"kind": "MLP"}, {"bins": 5}, seed=sym, run_type=data_type
                 )
                 est = estimator.fit_estimate(X_data, y_data, s_data)
-                est["alpha"] = est["p_hat_test"]
+                est["alpha"] = 1 - est["p_hat_test"]
             else:
                 raise ValueError(f"No known method {method}")
 
-            records[method].append(est["alpha"])
+            records[method].append(1 - est["alpha"])
     return records
 
 
