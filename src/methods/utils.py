@@ -89,8 +89,7 @@ def no_positives_test(
     }
 
 
-def plot_hist_with_excess(hU, hN, edges, model_name, real_p, estimated_p):
-    plt.style.use(["science", "no-latex"])
+def plot_hist_with_excess(hU, hN, edges, real_p, estimated_p):
     bw = np.diff(edges)
     bw[bw == 0] = 1e-12
 
@@ -143,16 +142,17 @@ def plot_hist_with_excess(hU, hN, edges, model_name, real_p, estimated_p):
         prop={"weight": fontweight, "size": 14},
     )
     ax.grid(True, linestyle="--", alpha=0.6)
-    ax.set_title(f"Real p={real_p:.2f} | Estimated p={estimated_p:.2f}")
+    ax.set_title(f"Estimated p={estimated_p:.2f}")
 
-    histograms_dir = "../histograms"
-    output_png = os.path.join(histograms_dir, f"{model_name}_p={real_p}.png")
-    output_pdf = os.path.join(histograms_dir, f"{model_name}_p={real_p}.pdf")
+    histograms_dir = "./histograms"
+    output_png = os.path.join(histograms_dir, f"p={real_p}.png")
+    output_pdf = os.path.join(histograms_dir, f"p={real_p}.pdf")
     save_dir = os.path.dirname(output_png)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     plt.savefig(output_png, dpi=300, bbox_inches="tight")
     plt.savefig(output_pdf, bbox_inches="tight")
+    plt.show()
     plt.close(fig)
 
 
@@ -160,7 +160,6 @@ def nu_estimate_p_robust(
     scores_U: np.ndarray,
     scores_N: np.ndarray,
     *,
-    model_name: str = None,
     real_p: float = None,
     bins: int = 80,
     tail_trim: float = 0.001,
@@ -168,7 +167,16 @@ def nu_estimate_p_robust(
     min_bin_count_U: int = 1,
     relax: float | str = "auto",
     auto_relax_scale: float = 2.0,
+    show_histogram: bool = False,
+    debug: bool = False,
 ) -> float:
+    if debug:
+        diagnose_scores(scores_U, scores_N)
+        diagnose_ratio_curve(scores_U, scores_N)
+        diagnose_heavy_tail(scores_U, scores_N)
+        diagnose_bootstrap_bias(scores_U, scores_N)
+        diagnose_clumping(scores_U)
+
     U = np.asarray(scores_U, float).ravel()
     N = np.asarray(scores_N, float).ravel()
     nU, nN = len(U), len(N)
@@ -183,7 +191,7 @@ def nu_estimate_p_robust(
     edges = np.quantile(both, np.linspace(lo, hi, bins + 1))
     # edges = np.linspace(lo, hi, bins + 1)
 
-    cU, _ = np.histogram(Uc, bins=edges)
+    cU, _ = np.histogram(U, bins=edges)
     cN, _ = np.histogram(Nc, bins=edges)
     mask = (cN >= min_bin_count_N) & (cU >= min_bin_count_U)
     if not np.any(mask):
@@ -199,11 +207,113 @@ def nu_estimate_p_robust(
         relax = auto_relax_scale / min(nU, nN)
     denom = np.maximum(hN[mask], 1e-12)
     ratios = (hU[mask] + float(relax)) / denom
-    piN_hat = float(np.clip(np.min(ratios), 0.0, 1.0))
+    # piN_hat = float(np.clip(np.min(ratios), 0.0, 1.0))
+    piN_hat = np.percentile(ratios, 10.0)
 
     estimated_p = float(np.clip(1.0 - piN_hat, 0.0, 1.0))
-    if model_name is not None:
-        plot_hist_with_excess(
-            hU_, piN_hat * hN_, edges, model_name, real_p, estimated_p
-        )
+    if show_histogram:
+        plot_hist_with_excess(hU_, piN_hat * hN_, edges, real_p, estimated_p)
     return estimated_p
+
+
+def diagnose_clumping(scores_U):
+    u_vals = np.unique(scores_U)
+    print(f"--- DIAGNOSIS 3 ---")
+    print(f"Total Samples: {len(scores_U)}")
+    print(f"Unique Scores: {len(u_vals)}")
+    if len(u_vals) < 100:
+        print("WARNING: Severe Clumping detected. Add noise before estimation.")
+    else:
+        print("Score resolution looks fine.")
+
+
+def diagnose_bootstrap_bias(scores_U, scores_N, n_boot=50):
+    estimates = []
+
+    # Run 50 iterations of resampling
+    for _ in range(n_boot):
+        # Sample with replacement
+        U_resample = np.random.choice(scores_U, size=len(scores_U), replace=True)
+        N_resample = np.random.choice(scores_N, size=len(scores_N), replace=True)
+
+        # Use your current best estimator function
+        est = nu_estimate_p_robust(U_resample, N_resample)
+        estimates.append(est)
+
+    mean_est = np.mean(estimates)
+    std_est = np.std(estimates)
+
+    print(f"--- DIAGNOSIS 2 ---")
+    print(f"Mean Estimate: {mean_est:.3f}")
+    print(f"Std Dev: {std_est:.3f}")
+    print(f"95% CI: [{mean_est - 2 * std_est:.3f}, {mean_est + 2 * std_est:.3f}]")
+
+
+def diagnose_heavy_tail(scores_U, scores_N):
+    plt.figure(figsize=(10, 5))
+
+    # Use Log Scale for Y-axis to see the "tail" behavior
+    plt.hist(scores_U, bins=50, alpha=0.5, density=True, label="Suspect (U)", log=True)
+    plt.hist(
+        scores_N, bins=50, alpha=0.5, density=True, label="Reference (N)", log=True
+    )
+
+    plt.title("Diagnosis 1: Log-Density Tail Check")
+    plt.xlabel("Classifier Score")
+    plt.ylabel("Log Density")
+    plt.legend()
+    plt.show()
+
+
+def diagnose_scores(U, N):
+    print(f"--- DIAGNOSIS ---")
+    print(f"Range U: [{np.min(U):.4f}, {np.max(U):.4f}]")
+    print(f"Range N: [{np.min(N):.4f}, {np.max(N):.4f}]")
+
+    # Check Skewness (Median vs Mean)
+    print(f"N Mean: {np.mean(N):.4f}, N Median: {np.median(N):.4f}")
+
+    # Check Linear Binning Failure
+    counts, _ = np.histogram(N, bins=50)
+    empty_bins = np.sum(counts == 0)
+    print(f"With 50 Linear Bins, {empty_bins} bins are totally empty.")
+
+    # Check if mass is concentrated
+    mass_in_top_bin = counts[-1] / len(N)
+    print(f"Mass in highest bin: {mass_in_top_bin * 100:.1f}%")
+
+
+def diagnose_ratio_curve(scores_U, scores_N, bins=20):
+    U = np.array(scores_U)
+    N = np.array(scores_N)
+
+    # Quantile Bins
+    both = np.concatenate([U, N])
+    edges = np.quantile(both, np.linspace(0, 1, bins + 1))
+
+    cU, _ = np.histogram(U, bins=edges)
+    cN, _ = np.histogram(N, bins=edges)
+
+    # Avoid div by zero
+    mask = cN >= 5
+    prob_U = cU[mask] / len(U)
+    prob_N = cN[mask] / len(N)
+
+    ratios = prob_U / prob_N
+
+    # PLOT
+    plt.figure(figsize=(10, 4))
+    plt.plot(ratios, marker="o", linestyle="-", label="U/N Ratio")
+    plt.axhline(0.8, color="green", linestyle="--", label="True Min (0.8)")
+    plt.axhline(
+        np.min(ratios),
+        color="red",
+        linestyle="--",
+        label=f"Detected Min ({np.min(ratios):.2f})",
+    )
+    plt.title("The 'Ratio Curve' Diagnosis")
+    plt.xlabel("Bin Index (Low Score -> High Score)")
+    plt.ylabel("Density Ratio")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
