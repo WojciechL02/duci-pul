@@ -4,7 +4,6 @@ import time
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from data import prepare_data
 from utils import seed_everything
@@ -15,6 +14,7 @@ from methods.pul import (
     SuMPE,
     AlphaMax,
 )
+from methods.pul_based import PULBased
 import concurrent.futures
 
 
@@ -39,6 +39,7 @@ METHODS_MAPPING = {
     "dedpul": r"DEDPUL~\citep{ivanov2020dedpul}",
     "sumpe": r"SuMPE~\citep{zhu2023sumpe}",
     "alphamax": r"AlphaMax~\citep{jain2016alphamax}",
+    "pul": "PUL",
 }
 
 COLOR_MAPPING = {
@@ -47,9 +48,10 @@ COLOR_MAPPING = {
     "dedpul": "blue",
     "sumpe": "orange",
     "alphamax": "purple",
+    "pul": "gray",
 }
 
-RAW_METHODS_ORDER = ["km", "tice", "dedpul", "sumpe", "alphamax"]
+RAW_METHODS_ORDER = ["km", "tice", "dedpul", "sumpe", "alphamax", "pul"]
 
 
 def calculate_metrics_df(records: dict) -> pd.DataFrame:
@@ -249,42 +251,45 @@ def save_paper_table(records: dict, name: str, path_to_plots: str) -> None:
     )
 
 
-def run_experiment(methods, name, nsym, p, ss_len, data_type, results_dir, data_dir):
+def run_experiment(methods, name, nsym, p, ss_len, data_type, data_dir):
     records = defaultdict(list)
     for method in methods:
-        for sym in np.arange(0, nsym, 1):
+        for sym in range(nsym):
             X_data, y_data, s_data, _ = prepare_data(
                 name=name,
-                seed=int(sym),
+                seed=sym,
                 p=p,
                 ss_len=ss_len,
                 run_type=data_type,
                 data_dir=data_dir,
             )
-            X_train, X_test, y_train, y_test, s_train, s_test = train_test_split(
-                X_data, y_data, s_data, test_size=0.2, random_state=int(sym)
-            )
-            seed_everything(int(sym))
+            seed_everything(sym)
 
             if method == "km":
                 km_estimator = KM(stability_eps=1e-2)
-                est = km_estimator.estimate(X_train, s_train)
+                est = km_estimator.estimate(X_data, s_data)
                 est["alpha"] = 1 - est["alpha"]
             elif method == "tice":
                 tice_estimator = TICE()
-                est = tice_estimator.estimate(X_train, s_train)
+                est = tice_estimator.estimate(X_data, s_data)
             elif method == "dedpul":
                 dedpul_estimator = DEDPUL()
-                est = dedpul_estimator.estimate(X_train, s_train)
+                est = dedpul_estimator.estimate(X_data, s_data)
             elif method == "sumpe":
                 estimator = SuMPE(
                     base_estimator="km", base_estimator_kwargs={"stability_eps": 1e-2}
                 )
-                est = estimator.estimate(X_train, s_train)
+                est = estimator.estimate(X_data, s_data)
             elif method == "alphamax":
                 estimator = AlphaMax()
-                est = estimator.estimate(X_train, s_train)
+                est = estimator.estimate(X_data, s_data)
                 est["alpha"] = 1 - est["alpha"]
+            elif method == "pul":
+                estimator = PULBased(
+                    "lbe", {"kind": "MLP"}, {"bins": 5}, seed=sym, run_type=data_type
+                )
+                est = estimator.fit_estimate(X_data, y_data, s_data)
+                est["alpha"] = est["p_hat_test"]
             else:
                 raise ValueError(f"No known method {method}")
 
@@ -298,13 +303,7 @@ def main():
         "--methods",
         type=str,
         nargs="+",
-        default=[
-            "km",
-            "tice",
-            "dedpul",
-            "sumpe",
-            "alphamax",
-        ],
+        default=["km", "tice", "dedpul", "sumpe", "alphamax", "pul"],
         required=False,
         help="MPE methods to compare",
     ),
@@ -356,21 +355,20 @@ def main():
     #         p,
     #         args.ss_len,
     #         args.data_type,
-    #         args.results_dir,
     #         args.data_dir,
     #     )
     #     records[p] = single_records
     #     et = time.perf_counter()
     #     print(f"Time: {et-st:.1f}(s)")
-    #
+
     # save_paper_table(records, f"{args.target}", args.results_dir)
     # print("Done!")
 
     p_values = [0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
     records = {}
-    print(f"Starting parallel execution on {len(p_values)} tasks...")
+    print(f"Starting parallel execution...")
     global_start = time.perf_counter()
-    with concurrent.futures.ProcessPoolExecutor(max_workers=16) as executor:
+    with concurrent.futures.ProcessPoolExecutor() as executor:
         future_to_p = {
             executor.submit(
                 run_experiment,
@@ -380,7 +378,6 @@ def main():
                 p,
                 args.ss_len,
                 args.data_type,
-                args.results_dir,
                 args.data_dir,
             ): p
             for p in p_values
@@ -389,7 +386,6 @@ def main():
         for future in concurrent.futures.as_completed(future_to_p):
             p = future_to_p[future]
             try:
-
                 single_records = future.result()
                 records[p] = single_records
                 print(f"Finished p={p}")
