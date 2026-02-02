@@ -22,25 +22,19 @@ class MPEBased:
 
     def fit_estimate(self, X_data, y_data, s_data, X_ctrl=None):
         tstart = time.perf_counter()
-        X_mixture = np.unique(X_data[np.where(s_data == 0)[0], :], axis=0)
-        X_component = np.unique(X_data[np.where(s_data == 1)[0], :], axis=0)
         model = self.mpe_class(**self.mpe_args)
-        est = model.estimate(X_mixture, X_component)
+        est = model.estimate(X_data, s_data)
         internal_pi = 1 - est["alpha"]
         if self.run_type == "correction":
             # CONTROL FEATURES
             model_ctrl = self.mpe_class(**self.mpe_args)
-            X_mixture_ctrl = np.unique(X_ctrl[np.where(s_data == 0)[0], :], axis=0)
-            X_component_ctrl = np.unique(X_ctrl[np.where(s_data == 1)[0], :], axis=0)
-            est_ctrl = model_ctrl.estimate(X_mixture_ctrl, X_component_ctrl)
+            est_ctrl = model_ctrl.estimate(X_ctrl, s_data)
             internal_pi_ctrl = 1 - est_ctrl["alpha"]
 
             # COMBINED FEATURES
             X_comb = np.hstack([X_ctrl, X_data])
             model_comb = self.mpe_class(**self.mpe_args)
-            X_mixture_comb = np.unique(X_comb[np.where(s_data == 0)[0], :], axis=0)
-            X_component_comb = np.unique(X_comb[np.where(s_data == 1)[0], :], axis=0)
-            est_comb = model_comb.estimate(X_mixture_comb, X_component_comb)
+            est_comb = model_comb.estimate(X_comb, s_data)
             internal_pi_comb = 1 - est_comb["alpha"]
 
         run_time = time.perf_counter() - tstart
