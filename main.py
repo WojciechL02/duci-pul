@@ -8,6 +8,9 @@ from src.methods.pul_based import PULBased
 from src.methods.mpe_based import MPEBased
 
 
+MPE_METHODS = ["km", "dedpul", "tice", "alphamax"]
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig):
     OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
@@ -35,7 +38,7 @@ def main(cfg: DictConfig):
             bootstrap=cfg.bootstrap,
         )
 
-        if cfg.method.name == "km":
+        if cfg.method.name in MPE_METHODS:
             estimator = MPEBased(
                 cfg.method.name, cfg.method.mpe_args, run_type=cfg.run_type, seed=seed
             )

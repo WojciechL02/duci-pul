@@ -126,8 +126,8 @@ def save_results(records: list, metrics: list, results_dir: str, metadata):
     os.makedirs(results_dir, exist_ok=True)
 
     model_name = metadata.target
-    if metadata.method.name == "km":
-        filename = f"km_{model_name}_{metadata.run_type}_len{metadata.ss_len}_p={metadata.prob}.csv"
+    if "mpe_args" in list(metadata.method.keys()):
+        filename = f"{metadata.method.name}_{model_name}_{metadata.run_type}_len{metadata.ss_len}_p={metadata.prob}.csv"
     else:
         pul_args = "_"
         if len(metadata.method.pul_args) > 0:

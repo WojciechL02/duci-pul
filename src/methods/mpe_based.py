@@ -1,9 +1,9 @@
 import time
 import numpy as np
-from .algorithms import KM, TICE
+from .algorithms import KM, TICE, DEDPUL, AlphaMax
 
 
-METHOD_REGISTRY = {"km": KM, "tice": TICE}
+METHOD_REGISTRY = {"km": KM, "tice": TICE, "dedpul": DEDPUL, "alphamax": AlphaMax}
 
 
 class MPEBased:
