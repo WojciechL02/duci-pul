@@ -4,11 +4,8 @@ from omegaconf import DictConfig, OmegaConf
 
 from src.data import prepare_data
 from src.utils import save_results, print_summary, seed_everything
-from src.methods.pul_based import PULBased
-from src.methods.mpe_based import MPEBased
-
-
-MPE_METHODS = ["km", "dedpul", "tice", "alphamax"]
+from src.methods.pul_based import PULBased, PUL_METHODS
+from src.methods.mpe_based import MPEBased, MPE_METHODS
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -42,7 +39,7 @@ def main(cfg: DictConfig):
             estimator = MPEBased(
                 cfg.method.name, cfg.method.mpe_args, run_type=cfg.run_type, seed=seed
             )
-        else:
+        elif cfg.method.name in PUL_METHODS:
             estimator = PULBased(
                 cfg.method.name,
                 cfg.method.pul_args,
@@ -50,6 +47,8 @@ def main(cfg: DictConfig):
                 cfg.run_type,
                 seed,
             )
+        else:
+            raise ValueError(f"Algorithm {cfg.method.name} not supported")
         results = estimator.fit_estimate(X_test, y_test, s_test, X_ctrl_test)
         print(f"Run {run + 1}/{cfg.n_runs}: p_hat={results['p_hat_test']:.3f}")
         records.append(results)

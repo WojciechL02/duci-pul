@@ -7,6 +7,7 @@ from .utils import nu_estimate_p_robust, no_positives_test
 from .algorithms import LBE, SAREM, PGlin, PUe, PUSB, PUThreshold
 
 
+PUL_METHODS = ["lbe", "sarem", "threshold", "pglin", "pue", "pusb"]
 METHOD_REGISTRY = {
     "lbe": LBE,
     "sarem": SAREM,

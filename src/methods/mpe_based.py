@@ -3,6 +3,7 @@ import numpy as np
 from .algorithms import KM, TICE, DEDPUL, AlphaMax
 
 
+MPE_METHODS = ["km", "tice", "dedpul", "alphamax"]
 METHOD_REGISTRY = {"km": KM, "tice": TICE, "dedpul": DEDPUL, "alphamax": AlphaMax}
 
 
