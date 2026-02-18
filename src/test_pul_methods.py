@@ -15,7 +15,17 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from data import prepare_data
 from utils import seed_everything
-from methods.pul import PUbasic, LBE, SAREM, PUThreshold, PUSB, PUe, PGlin, KM, TICE
+from methods.algorithms import (
+    PUbasic,
+    LBE,
+    SAREM,
+    PUThreshold,
+    PUSB,
+    PUe,
+    PGlin,
+    KM,
+    TICE,
+)
 
 
 METRICS_MAPPING = {
@@ -110,19 +120,25 @@ def compute_metrics(prob_y_pred, y_true):
 def run_experiment(methods, name, nsym, p, data_type, results_dir, data_dir):
     records = []
     for method in methods:
-        for sym in np.arange(0, nsym, 1):
+        print(f"{method}...")
+        for sym in range(nsym):
             X_data, y_data, s_data, _ = prepare_data(
                 name=name,
-                seed=int(sym),
+                seed=sym,
                 p=p,
                 ss_len=2000,
                 run_type=data_type,
                 data_dir=data_dir,
             )
             X_train, X_test, y_train, y_test, s_train, s_test = train_test_split(
-                X_data, y_data, s_data, test_size=0.2, random_state=int(sym)
+                X_data,
+                y_data,
+                s_data,
+                test_size=0.2,
+                random_state=sym,
+                stratify=y_data,
             )
-            seed_everything(int(sym))
+            seed_everything(sym)
 
             start_time = time.perf_counter()
             if method == "oracle":
@@ -131,19 +147,6 @@ def run_experiment(methods, name, nsym, p, data_type, results_dir, data_dir):
             elif method == "dummy":
                 model = PUbasic()
                 model.fit(X_train, s_train)
-            elif method == "km":
-                st = time.perf_counter()
-                km_estimator = KM()
-                est = km_estimator.estimate(X_train, s_train)
-                print("TIME:", time.perf_counter() - st)
-                km1 = 1 - est["alpha"]
-                km2 = 1 - est["km2"]
-                print(f"p={p}, km1={km1:.3f}, km2={km2:.3f}")
-                break
-            elif method == "tice":
-                tice_estimator = TICE()
-                est = tice_estimator.estimate(X_train, s_train)
-                print(f"p={p}, p_hat={est['alpha']:.3f}")
             else:
                 if method == "threshold":
                     model = PUThreshold()
@@ -152,32 +155,32 @@ def run_experiment(methods, name, nsym, p, data_type, results_dir, data_dir):
                 elif method == "pue":
                     model = PUe()
                 elif method == "lbe":
-                    model = LBE()
+                    model = LBE(kind="MLP")
                 elif method == "pglin":
                     model = PGlin()
                 elif method == "pusb":
                     km_estimator = KM()
-                    est = km_estimator.estimate(X_train, s_train)
+                    est = km_estimator.estimate(X_train[:500], s_train[:500])
                     est_pi = (1 - np.mean(s_train)) * est["km2"] + np.mean(s_train)
                     model = PUSB(est_pi, X_test, y_test)
                 else:
                     raise ValueError(f"Method {method} not known.")
                 model.fit(X_train, s_train)
 
-    #         end_time = time.perf_counter()
-    #         run_time = end_time - start_time
-    #         prob_y_test = model.predict_proba(X_test)[:, 1]
-    #         # flip_labels
-    #         prob_y_test = 1 - prob_y_test
-    #         y_test = 1 - y_test
-    #
-    #         results = compute_metrics(prob_y_test, y_test)
-    #         results["time"] = run_time
-    #         results["method"] = method
-    #         records.append(results)
-    #
-    # df = pd.DataFrame(records)
-    # save_paper_table(df, f"{name}_{p}", results_dir)
+            end_time = time.perf_counter()
+            run_time = end_time - start_time
+            prob_y_test = model.predict_proba(X_test)[:, 1]
+            # flip_labels
+            prob_y_test = 1 - prob_y_test
+            y_test = 1 - y_test
+
+            results = compute_metrics(prob_y_test, y_test)
+            results["time"] = run_time
+            results["method"] = method
+            records.append(results)
+
+    df = pd.DataFrame(records)
+    save_paper_table(df, f"{name}_{p}", results_dir)
 
 
 def main():
@@ -187,15 +190,14 @@ def main():
         type=str,
         nargs="+",
         default=[
-            # "pusb",
-            # "threshold",
-            # "sar-em",
-            # "pglin",
+            "pusb",
+            "threshold",
+            "sar-em",
+            "pglin",
             # "pue",
-            # "lbe",
-            # "oracle",
-            # "dummy",
-            "tice",
+            "lbe",
+            "oracle",
+            "dummy",
         ],
         required=False,
         help="PUL methods to compare",

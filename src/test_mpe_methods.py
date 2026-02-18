@@ -304,7 +304,7 @@ def main():
         default=["km", "tice", "dedpul", "sumpe", "alphamax", "pul"],
         required=False,
         help="MPE methods to compare",
-    ),
+    )
     parser.add_argument("--target", type=str, required=True, help="Model to use.")
     parser.add_argument("--n_runs", type=int, required=True, help="Number of runs")
     parser.add_argument(
