@@ -1,0 +1,5 @@
+name: imagenet_real
+dataset_path: /data/ImageNet100
+split: train
+test_name: val
+train_name: train

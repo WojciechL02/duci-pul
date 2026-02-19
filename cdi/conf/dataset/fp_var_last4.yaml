@@ -1,0 +1,5 @@
+name: fp_var_last4
+dataset_path: /home/jdubinsk/dataset_inference_dm/synthetic/datasets/imagenet_fp_var_last4_cfg1.5
+split: train
+test_name: val
+train_name: train

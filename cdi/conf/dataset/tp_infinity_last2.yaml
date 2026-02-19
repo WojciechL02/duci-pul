@@ -1,0 +1,5 @@
+name: tp_infinity_last2
+dataset_path: /home/jdubinsk/dataset_inference_dm/synthetic/datasets/imagenet_tp_infinity_last2_cfg3.0
+split: train
+test_name: val
+train_name: train

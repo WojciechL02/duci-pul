@@ -1,0 +1,4 @@
+name: imagenet_tp
+dataset_path: /net/tscratch/people/plgjotde/synthmem/imagenet_tp_s0.5
+test_name: val
+train_name: train

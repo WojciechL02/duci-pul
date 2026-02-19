@@ -1,0 +1,6 @@
+name: dit_rf
+vae_model: stabilityai/sd-vae-ft-mse
+diffuser_model: ./model_checkpoints/dit_rf/dit_moe_xl_8E2A.pt
+dataloader: dit
+image_size: 256
+batch_size: 16

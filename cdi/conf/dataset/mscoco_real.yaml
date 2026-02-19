@@ -1,0 +1,6 @@
+name: mscoco_real
+dataset_path: /home/jdubinsk/coco
+split: train
+train_name: train
+test_name: val
+image_size: 256

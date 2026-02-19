@@ -1,0 +1,7 @@
+# COCO subset: 5000 images for train and val (actual files, no symlinks)
+name: mscoco_real
+dataset_path: /home/jdubinsk/dataset_inference_dm/data/coco_5000
+split: train
+train_name: train
+test_name: val
+image_size: 256
