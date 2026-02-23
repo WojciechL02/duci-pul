@@ -165,3 +165,12 @@ class UViT_t2i_Wrapper(DiffusionModel):
         Return cumulative product of alphas for timestep t
         """
         return self.schedule.cum_alphas[t]
+
+    def get_loss(self, latents: T, classes: T, timestep: int, noise: T) -> T:
+        """
+        Standard diffusion noise-prediction MSE for (latents, text_embeddings).
+        """
+        latents_noisy = self.noise_latents(latents, timestep, noise)
+        noise_pred = self._predict_noise_from_latent(latents_noisy, classes, timestep)
+        batchwise_mse = ((noise - noise_pred) ** 2).mean(dim=list(range(1, len(noise.shape))))
+        return batchwise_mse.detach()

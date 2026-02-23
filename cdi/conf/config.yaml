@@ -1,7 +1,7 @@
 cfg:
-  path_to_features: ./out/features
-  path_to_scores: ./out/scores
-  path_to_eval_results: ./out/results
+  path_to_features: ./out_novqvae/features
+  path_to_scores: ./out_novqvae/scores
+  path_to_eval_results: ./out_novqvae/results
   seed: 0
   n_samples_eval: 2500
   train_samples: 2500

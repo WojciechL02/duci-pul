@@ -29,8 +29,9 @@ class CLiDExtractor(FeatureExtractor):
             noise_pred_cond = self.model.predict_noise_from_latent(
                 latents, classes, timestep, noise
             )
+            uncond_classes = None if classes.dim() == 1 else torch.zeros_like(classes)
             noise_pred_uncond = self.model.predict_noise_from_latent(
-                latents, None, timestep, noise
+                latents, uncond_classes, timestep, noise
             )
             L_xc.append(
                 -torch.norm(

@@ -1,0 +1,5 @@
+name: fp_var_last10_novqvae
+dataset_path: /home/jdubinsk/dataset_inference_dm/duci-pul/synthetic/datasets_novqvae/imagenet_fp_var_last10_cfg1.5
+split: train
+test_name: val
+train_name: train

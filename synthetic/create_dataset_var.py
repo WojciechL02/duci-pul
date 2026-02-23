@@ -256,7 +256,14 @@ def process_split(vae, var, split_dir, out_dir, args, split_name):
         transforms.Normalize([0.5] * 3, [0.5] * 3),
     ])
 
+    tf_raw = transforms.Compose([
+        transforms.Resize(256, interpolation=transforms.InterpolationMode.LANCZOS),
+        transforms.CenterCrop(256),
+        transforms.ToTensor(),
+    ])
+
     ds = ImageNetSubset(split_dir, tf, max_images=args.max_images)
+    ds_raw = ImageNetSubset(split_dir, tf_raw, max_images=args.max_images) if args.no_vqvae else None
     loader = DataLoader(
         ds, batch_size=args.batch_size, shuffle=False,
         num_workers=min(4, args.batch_size), pin_memory=True,
@@ -278,8 +285,13 @@ def process_split(vae, var, split_dir, out_dir, args, split_name):
         labels = labels.to(device)
         B = imgs.shape[0]
 
-        recon = batch_autoencoder(vae, imgs)
-        all_futs += save_batch(recon, syns, fnames, train_dir, executor)
+        if args.no_vqvae:
+            start = bi * args.batch_size
+            raw_imgs = torch.stack([ds_raw[start + i][0] for i in range(B)])
+            all_futs += save_batch(raw_imgs, syns, fnames, train_dir, executor)
+        else:
+            recon = batch_autoencoder(vae, imgs)
+            all_futs += save_batch(recon, syns, fnames, train_dir, executor)
 
         synth = batch_img2img(
             var, vae, imgs, labels,
@@ -322,6 +334,8 @@ def main():
     pa.add_argument("--gpu", type=int, default=1)
     pa.add_argument("--skip_tp", action="store_true")
     pa.add_argument("--skip_fp", action="store_true")
+    pa.add_argument("--no_vqvae", action="store_true",
+                    help="Save raw resized/cropped images for train/ instead of VQVAE reconstructions")
     args = pa.parse_args()
 
     assert 0 < args.last_scales <= 10, "last_scales must be 1–10"

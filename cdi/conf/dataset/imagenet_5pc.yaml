@@ -1,0 +1,6 @@
+name: imagenet_5pc
+dataset_path: /home/jdubinsk/dataset_inference_dm/duci-pul/cdi/data/imagenet_5pc
+split: train
+train_name: train
+test_name: val
+image_size: 256

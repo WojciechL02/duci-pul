@@ -214,16 +214,23 @@ __marimo__/
 
 # Large data directories
 synthetic/weights/
-synthetic/datasets/
+synthetic/datasets*/
 cdi/model_checkpoints/
 cdi/out/
 cdi/data/
 cdi/outputs/
 cdi/logs/
 cdi/analysis/
+cdi/out*
 
 # Wandb / experiment tracking
 **/wandb/
+
+# Dataset / artifact files
+*.npz
+
+# Upload staging
+full-pipeline/
 
 # Misc heavy artifacts
 *.tar.gz
