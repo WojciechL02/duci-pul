@@ -16,7 +16,7 @@ def create_subset(src_dir: str, dst_dir: str, images_per_class: int, seed: int =
     Create a subset of ImageNet with N images per class using actual file copies.
     
     Args:
-        src_dir: Source ImageNet directory (e.g., /data/ImageNet100)
+        src_dir: Source ImageNet directory (e.g., ../data/ImageNet100)
         dst_dir: Destination directory for subset
         images_per_class: Number of images to include per class
         seed: Random seed for reproducibility
@@ -64,7 +64,7 @@ def create_subset(src_dir: str, dst_dir: str, images_per_class: int, seed: int =
 
 def main():
     parser = argparse.ArgumentParser(description='Create ImageNet subset with N images per class')
-    parser.add_argument('--src', type=str, default='/data/ImageNet100',
+    parser.add_argument('--src', type=str, default='../data/ImageNet100',
                         help='Source ImageNet directory')
     parser.add_argument('--dst', type=str, required=True,
                         help='Destination directory for subset')

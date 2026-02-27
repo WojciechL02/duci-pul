@@ -1,12 +1,12 @@
 #!/bin/bash
 # Download COCO 2014 dataset for UViT text-to-image models
-# Usage: ./download_coco.sh /path/to/coco
+# Usage: ./download_coco.sh ../data/coco
 
 set -e
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <output_directory>"
-    echo "Example: $0 /home/user/data/coco"
+    echo "Example: $0 ../data/coco"
     exit 1
 fi
 
@@ -71,7 +71,7 @@ ls -la "$COCO_DIR"
 echo ""
 echo "Next steps:"
 echo "1. Extract text embeddings using:"
-echo "   cd /path/to/dataset_inference_dm"
+echo "   cd .."
 echo "   source .venv/bin/activate"
 echo "   python helper_scripts/uvit_extract_embeddings.py --split train"
 echo "   python helper_scripts/uvit_extract_embeddings.py --split val"

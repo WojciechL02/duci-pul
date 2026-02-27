@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torchvision import models
 from scipy import linalg
 import numpy as np
+import os
 
 try:
     from torchvision.models.utils import load_state_dict_from_url
@@ -14,7 +15,11 @@ except ImportError:
 # http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz
 FID_WEIGHTS_URL = 'https://github.com/mseitzer/pytorch-fid/releases/download/fid_weights/pt_inception-2015-12-05-6726825d.pth'
 
-FID_WEIGHTS_PATH = "/mnt/bn/foundation-vision/binyan.master/checkpoints/pt_inception-2015-12-05-6726825d.pth" # path on maliva
+FID_WEIGHTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "weights",
+    "pt_inception-2015-12-05-6726825d.pth",
+)
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     """Numpy implementation of the Frechet Distance.
@@ -244,8 +249,10 @@ def fid_inception_v3():
     inception.Mixed_7b = FIDInceptionE_1(1280)
     inception.Mixed_7c = FIDInceptionE_2(2048)
 
-    # state_dict = load_state_dict_from_url(FID_WEIGHTS_URL, progress=True)
-    state_dict = torch.load(FID_WEIGHTS_PATH)
+    if os.path.isfile(FID_WEIGHTS_PATH):
+        state_dict = torch.load(FID_WEIGHTS_PATH)
+    else:
+        state_dict = load_state_dict_from_url(FID_WEIGHTS_URL, progress=True)
     inception.load_state_dict(state_dict)
     return inception
 

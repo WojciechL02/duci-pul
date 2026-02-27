@@ -79,15 +79,17 @@ git clone --depth 1 https://github.com/CompVis/latent-diffusion.git latent-diffu
 cd ..
 ```
 
-### 5. Verify Installation
-
-```bash
-python cdi/smoke_imports.py
-```
-
 ---
 
 ## Downloading Source Data
+
+### Path Convention (Relative Paths)
+
+Use repo-relative paths to keep configs portable across machines.
+
+- From repo root (`duci-pul/`), keep datasets in `data/`.
+- From `cdi/` configs, dataset paths should usually be `../data/...`.
+- Synthetic dataset configs can point to `../synthetic/datasets/...` from `cdi/`.
 
 ### ImageNet
 
@@ -96,15 +98,15 @@ ImageNet must be in the standard ImageFolder format with `train/` and `val/` dir
 **Option 1: Academic Torrents (recommended for full dataset)**
 ```bash
 pip install libtorrent
-python cdi/helper_scripts/download_imagenet_torrent.py --split train --output /path/to/imagenet
-python cdi/helper_scripts/download_imagenet_torrent.py --split val --output /path/to/imagenet
-bash cdi/helper_scripts/extract_imagenet.sh /path/to/imagenet
+python cdi/helper_scripts/download_imagenet_torrent.py --split train --output data/imagenet_1k
+python cdi/helper_scripts/download_imagenet_torrent.py --split val --output data/imagenet_1k
+bash cdi/helper_scripts/extract_imagenet.sh data/imagenet_1k
 ```
 
 **Creating a subset (5 images per class = 5000 images):**
 ```bash
 python cdi/helper_scripts/create_imagenet_subset.py \
-    --src /path/to/imagenet \
+    --src data/imagenet_1k \
     --dst cdi/data/imagenet_5000 \
     --images-per-class 5
 ```
@@ -134,7 +136,7 @@ VAR uses 10 hierarchical scales. The `--last_scales` parameter controls how many
 ```bash
 cd synthetic
 python create_dataset_var.py \
-    --imagenet_dir /path/to/imagenet \
+    --imagenet_dir ../data/imagenet_1k \
     --output_root datasets \
     --last_scales 4 \
     --cfg 1.5 \
@@ -159,7 +161,7 @@ Infinity uses 7 scales at 256x256. The `--last_scales` parameter controls genera
 ```bash
 cd synthetic
 python create_dataset_infinity.py \
-    --imagenet_dir /path/to/imagenet \
+    --imagenet_dir ../data/imagenet_1k \
     --output_root datasets \
     --last_scales 2 \
     --cfg 3.0 \
@@ -182,7 +184,7 @@ RAR tokenizes images into 256 discrete tokens on a 16x16 grid. The `--gen_ratio`
 ```bash
 cd synthetic
 python create_dataset_rar.py \
-    --imagenet_dir /path/to/imagenet \
+    --imagenet_dir ../data/imagenet_1k \
     --output_root datasets \
     --gen_ratio 0.25 \
     --mode suffix \
@@ -243,7 +245,7 @@ For each synthetic dataset, create a YAML file in `cdi/conf/dataset/`. Example f
 
 ```yaml
 name: tp_var_last4
-dataset_path: /absolute/path/to/synthetic/datasets/imagenet_tp_var_last4_cfg1.5
+dataset_path: ../synthetic/datasets/imagenet_tp_var_last4_cfg1.5
 split: train
 test_name: val
 train_name: train

@@ -4,5 +4,5 @@ diffuser_model: ./model_checkpoints/uvit_t2i/mscoco_uvit_small_deep.pth
 depth: 16
 dataloader: coco_uvit
 image_size: 256
-dataset_path: /home/jdubinsk/coco
+dataset_path: ../data/coco
 batch_size: 128

@@ -29,7 +29,7 @@ echo "Download these files and place them in: $CHECKPOINT_DIR"
 echo ""
 
 # Check for gdown (pip install gdown)
-if command -v gdown &> /dev/null; then
+if command -v gdown; then
     echo "gdown found. Attempting automatic download..."
     echo ""
     
@@ -74,4 +74,4 @@ echo "  - mscoco_uvit_small_deep.pth"
 echo "  - autoencoder_kl.pth"
 echo ""
 echo "Current contents:"
-ls -la "$CHECKPOINT_DIR" 2>/dev/null || echo "(directory not found)"
+ls -la "$CHECKPOINT_DIR" || echo "(directory not found)"

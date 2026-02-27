@@ -41,7 +41,9 @@ infer_eval_hpsv21() {
     ${pip_ext}install -U diffusers
     sudo apt install python3-tk
     wget https://dl.fbaipublicfiles.com/mmf/clip/bpe_simple_vocab_16e6.txt.gz
-    mv bpe_simple_vocab_16e6.txt.gz /home/tiger/.local/lib/python3.9/site-packages/hpsv2/src/open_clip
+    HPSV2_OPEN_CLIP_DIR="$(${python_ext} -c "import os, hpsv2; print(os.path.join(os.path.dirname(hpsv2.__file__), 'src', 'open_clip'))")"
+    mkdir -p "${HPSV2_OPEN_CLIP_DIR}"
+    mv bpe_simple_vocab_16e6.txt.gz "${HPSV2_OPEN_CLIP_DIR}"
 
     mkdir -p ${out_dir}
     ${python_ext} evaluation/hpsv2/eval_hpsv2.py \

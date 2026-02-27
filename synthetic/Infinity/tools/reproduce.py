@@ -7,9 +7,13 @@ import numpy as np
 from run_infinity import *
 
 torch.cuda.set_device(0)
-model_path = '/workspace/Infinity/weights/infinity_2b_reg.pth'
-vae_path = '/workspace/Infinity/weights/infinity_vae_d32reg.pth'
-text_encoder_ckpt = '/workspace/Infinity/weights/flan-t5-xl'
+script_dir = osp.dirname(osp.abspath(__file__))
+root_dir = osp.dirname(script_dir)
+weights_dir = osp.join(root_dir, "weights")
+CACHE_DIR = os.environ.get("INFINITY_CACHE_DIR", osp.join(root_dir, ".cache"))
+model_path = osp.join(weights_dir, "infinity_2b_reg.pth")
+vae_path = osp.join(weights_dir, "infinity_vae_d32reg.pth")
+text_encoder_ckpt = osp.join(weights_dir, "flan-t5-xl")
 
 # SET
 args = argparse.Namespace(
@@ -30,7 +34,7 @@ args = argparse.Namespace(
     apply_spatial_patchify=0,
     h_div_w_template=1.000,
     use_flex_attn=0,
-    cache_dir='/dev/shm',
+    cache_dir=CACHE_DIR,
     checkpoint_type='torch',
     seed=0,
     bf16=1,

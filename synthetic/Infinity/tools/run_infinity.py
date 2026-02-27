@@ -26,6 +26,8 @@ import PIL.Image as PImage
 from torchvision.transforms.functional import to_tensor
 from infinity.utils.dynamic_resolution import dynamic_resolution_h_w, h_div_w_templates
 
+DEFAULT_CACHE_DIR = os.environ.get("INFINITY_CACHE_DIR", "./.cache")
+
 
 def extract_key_val(text):
     pattern = r'<(.+?):(.+?)>'
@@ -369,7 +371,7 @@ def add_common_arguments(parser):
     parser.add_argument('--h_div_w_template', type=float, default=1.000)
     parser.add_argument('--use_flex_attn', type=int, default=0, choices=[0,1])
     parser.add_argument('--enable_positive_prompt', type=int, default=0, choices=[0,1])
-    parser.add_argument('--cache_dir', type=str, default='/dev/shm')
+    parser.add_argument('--cache_dir', type=str, default=DEFAULT_CACHE_DIR)
     parser.add_argument('--enable_model_cache', type=int, default=0, choices=[0,1])
     parser.add_argument('--checkpoint_type', type=str, default='torch')
     parser.add_argument('--seed', type=int, default=0)

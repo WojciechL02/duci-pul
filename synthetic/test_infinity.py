@@ -10,6 +10,10 @@ from infinity.utils.dynamic_resolution import dynamic_resolution_h_w, h_div_w_te
 
 WEIGHTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weights", "Infinity")
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_outputs")
+CACHE_DIR = os.environ.get(
+    "INFINITY_CACHE_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache"),
+)
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -33,7 +37,7 @@ def main():
         apply_spatial_patchify=0,
         h_div_w_template=1.000,
         use_flex_attn=0,
-        cache_dir="/dev/shm",
+        cache_dir=CACHE_DIR,
         checkpoint_type="torch",
         seed=42,
         bf16=0,

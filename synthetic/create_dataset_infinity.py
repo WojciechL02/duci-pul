@@ -50,6 +50,7 @@ from run_infinity import (
 from infinity.utils.dynamic_resolution import dynamic_resolution_h_w, h_div_w_templates
 
 WEIGHTS_DIR = os.path.join(SCRIPT_DIR, "weights", "Infinity")
+CACHE_DIR = os.environ.get("INFINITY_CACHE_DIR", os.path.join(SCRIPT_DIR, ".cache"))
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +137,7 @@ def get_infinity_args(pn="0.06M"):
         apply_spatial_patchify=0,
         h_div_w_template=1.000,
         use_flex_attn=0,
-        cache_dir="/dev/shm",
+        cache_dir=CACHE_DIR,
         checkpoint_type="torch",
         seed=42,
         bf16=0,

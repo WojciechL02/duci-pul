@@ -295,7 +295,10 @@ class BackupStreamToFile(object):
             time_str = datetime.datetime.now(tz=pytz.timezone('Asia/Shanghai')).strftime('[%m-%d %H:%M:%S]')
             self.file_stream.write('\n'*7 + '='*55 + f'   RESTART {time_str}   ' + '='*55 + '\n')
         self.file_stream.flush()
-        os.system(f'ln -s {fname} /opt/tiger/run_trial/ >/dev/null 2>&1')
+        trial_dir = os.environ.get('INFINITY_TRIAL_DIR')
+        if trial_dir:
+            os.makedirs(trial_dir, exist_ok=True)
+            os.system(f'ln -s {fname} {trial_dir}')
         self.enabled = True
     
     def write(self, message):

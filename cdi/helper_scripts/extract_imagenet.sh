@@ -3,7 +3,9 @@
 
 set -e
 
-IMAGENET_DIR="${1:-/home/jdubinsk/imagenet_1k}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+IMAGENET_DIR="${1:-$REPO_ROOT/data/imagenet_1k}"
 
 echo "Extracting ImageNet to: $IMAGENET_DIR"
 cd "$IMAGENET_DIR"

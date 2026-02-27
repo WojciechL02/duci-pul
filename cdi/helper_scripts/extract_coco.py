@@ -2,8 +2,10 @@
 """Extract COCO zip files."""
 import zipfile
 import os
+from pathlib import Path
 
-coco_dir = "/home/jdubinsk/coco"
+repo_root = Path(__file__).resolve().parents[2]
+coco_dir = repo_root / "data" / "coco"
 os.chdir(coco_dir)
 
 for zf in ['annotations_trainval2014.zip', 'val2014.zip', 'train2014.zip']:

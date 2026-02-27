@@ -1,6 +1,6 @@
 # ImageNet subset: 5000 images (5 per class × 1000 classes), actual files
 name: imagenet_real
-dataset_path: /home/jdubinsk/dataset_inference_dm/data/imagenet_5000
+dataset_path: ../data/imagenet_5000
 split: train
 test_name: val
 train_name: train

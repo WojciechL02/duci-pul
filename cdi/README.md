@@ -42,12 +42,6 @@ git clone --depth 1 https://github.com/feizc/DiT-MoE.git DiT_MoE
 git clone --depth 1 https://github.com/CompVis/latent-diffusion.git latent-diffusion
 ```
 
-### 5. Verify Installation
-
-```bash
-python smoke_imports.py
-```
-
 ## Downloading Models
 
 ### DiT-MoE Model (DiT_RF)
@@ -85,6 +79,26 @@ bash helper_scripts/download_uvit_checkpoints.sh
 
 ## Downloading Data
 
+### Path Convention (Relative Paths)
+
+This repo now uses relative paths in configs and helper scripts.
+
+- Run CDI commands from `duci-pul/cdi/`.
+- Keep real datasets under `duci-pul/data/` (one level above `cdi/`).
+- Use `../data/...` in `conf/dataset/*.yaml` and model configs.
+
+Typical layout:
+
+```
+duci-pul/
+├── cdi/
+└── data/
+    ├── imagenet_1k/
+    ├── imagenet_5000/
+    ├── coco/
+    └── coco_5000/
+```
+
 ### ImageNet
 
 ImageNet must be in the standard ImageFolder format:
@@ -108,22 +122,22 @@ imagenet/
 **Option 1: Academic Torrents (recommended for full dataset)**
 ```bash
 pip install libtorrent
-python helper_scripts/download_imagenet_torrent.py --split train --output /path/to/imagenet
-python helper_scripts/download_imagenet_torrent.py --split val --output /path/to/imagenet
-bash helper_scripts/extract_imagenet.sh /path/to/imagenet
+python helper_scripts/download_imagenet_torrent.py --split train --output ../data/imagenet_1k
+python helper_scripts/download_imagenet_torrent.py --split val --output ../data/imagenet_1k
+bash helper_scripts/extract_imagenet.sh ../data/imagenet_1k
 ```
 
 **Creating a subset (5 images per class → 5000 images, actual files in `data/imagenet_5000`):**
 ```bash
 python helper_scripts/create_imagenet_subset.py \
-    --src /path/to/imagenet \
+    --src ../data/imagenet_1k \
     --dst data/imagenet_5000 \
     --images-per-class 5
 ```
-Use `+dataset=imagenet_5000`. Full ImageNet: update `conf/dataset/imagenet.yaml` with your path:
+Use `+dataset=imagenet_5000`. Full ImageNet (default config):
 ```yaml
 name: imagenet_real
-dataset_path: /path/to/your/imagenet
+dataset_path: ../data/imagenet_1k
 split: train  # or val
 ```
 
@@ -135,10 +149,10 @@ COCO 2014 is required for UViT text-to-image models.
 
 ```bash
 # Using helper script (recommended)
-bash helper_scripts/download_coco.sh /path/to/coco
+bash helper_scripts/download_coco.sh ../data/coco
 
 # Or manually:
-mkdir -p /path/to/coco && cd /path/to/coco
+mkdir -p ../data/coco && cd ../data/coco
 wget http://images.cocodataset.org/zips/train2014.zip
 wget http://images.cocodataset.org/zips/val2014.zip
 wget http://images.cocodataset.org/annotations/annotations_trainval2014.zip
@@ -151,8 +165,8 @@ The UViT models require pre-extracted CLIP text embeddings:
 
 ```bash
 source .venv/bin/activate
-python helper_scripts/uvit_extract_embeddings.py --coco-dir /path/to/coco --split train
-python helper_scripts/uvit_extract_embeddings.py --coco-dir /path/to/coco --split val
+python helper_scripts/uvit_extract_embeddings.py --coco-dir ../data/coco --split train
+python helper_scripts/uvit_extract_embeddings.py --coco-dir ../data/coco --split val
 ```
 
 Expected directory structure after setup:
@@ -177,15 +191,15 @@ coco/
 **Creating a subset (5000 images, actual files in `data/coco_5000`):**
 ```bash
 python helper_scripts/create_coco_subset.py \
-    --src /path/to/coco \
+    --src ../data/coco \
     --dst data/coco_5000 \
     --num-train 5000 \
     --num-val 5000
 ```
-Use `+dataset=mscoco_5000` (config points to `data/coco_5000`). Full COCO: update `conf/dataset/mscoco_real.yaml` with your path:
+Use `+dataset=mscoco_5000` (config points to `data/coco_5000`). Full COCO (default config):
 ```yaml
 name: mscoco_real
-dataset_path: /path/to/your/coco
+dataset_path: ../data/coco
 split: train  # or val
 ```
 

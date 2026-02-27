@@ -1,5 +1,5 @@
 name: imagenet_real
-dataset_path: /home/jdubinsk/imagenet_1k
+dataset_path: ../data/imagenet_1k
 split: train
 test_name: val
 train_name: train

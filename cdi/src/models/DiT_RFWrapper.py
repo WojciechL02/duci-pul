@@ -33,8 +33,6 @@ class DiT_RFWrapper(DiffusionModel):
             new_k = k
             new_k = new_k.replace(".attn.Wqkv.", ".attn.qkv.")
             new_k = new_k.replace(".attn.out_proj.", ".attn.proj.")
-            new_k = new_k.replace(".attn.q_norm.", ".attn.q_norm_layer.")
-            new_k = new_k.replace(".attn.k_norm.", ".attn.k_norm_layer.")
             if "attn.Wqkv" in new_k:
                 new_k = new_k.replace("attn.Wqkv", "attn.qkv")
             if "attn.out_proj" in new_k:

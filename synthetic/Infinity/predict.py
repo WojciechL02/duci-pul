@@ -19,6 +19,8 @@ from infinity.utils.dynamic_resolution import dynamic_resolution_h_w, h_div_w_te
 
 MODEL_CACHE = "model_cache"
 MODEL_URL = f"https://weights.replicate.delivery/default/FoundationVision/Infinity/model_cache.tar"
+DEFAULT_CACHE_DIR = os.environ.get("INFINITY_CACHE_DIR", "./.cache")
+DEFAULT_OUTPUT_PATH = "out.png"
 
 
 def download_weights(url, dest):
@@ -146,7 +148,7 @@ class Predictor(BasePredictor):
             apply_spatial_patchify=0,
             h_div_w_template=1.000,
             use_flex_attn=0,
-            cache_dir="/tmp/cache",
+            cache_dir=DEFAULT_CACHE_DIR,
             checkpoint_type="torch",
             bf16=1,
         )
@@ -203,6 +205,6 @@ class Predictor(BasePredictor):
             sampling_per_bits=self.args.sampling_per_bits,
             enable_positive_prompt=0,
         )
-        output_path = "/tmp/out.png"
+        output_path = DEFAULT_OUTPUT_PATH
         cv2.imwrite(output_path, generated_image.cpu().numpy())
         return Path(output_path)

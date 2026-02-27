@@ -1,5 +1,5 @@
 name: tp_var_last6_novqvae
-dataset_path: /home/jdubinsk/dataset_inference_dm/duci-pul/synthetic/datasets_novqvae/imagenet_tp_var_last6_cfg1.5
+dataset_path: ../synthetic/datasets_novqvae/imagenet_tp_var_last6_cfg1.5
 split: train
 test_name: val
 train_name: train

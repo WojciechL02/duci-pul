@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
-source /home/jdubinsk/dataset_inference_dm/.venv/bin/activate
-W=/home/jdubinsk/dataset_inference_dm/synthetic/weights
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$REPO_ROOT/.venv/bin/activate"
+W="$SCRIPT_DIR/weights"
 mkdir -p "$W/VAR" "$W/RAR" "$W/Infinity"
 echo "Downloading VAR-d30..."
 python3 -c "from huggingface_hub import hf_hub_download as d; d('FoundationVision/var','var_d30.pth',local_dir='$W/VAR')"
