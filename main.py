@@ -6,6 +6,7 @@ from src.data import prepare_data
 from src.utils import save_results, print_summary, seed_everything
 from src.methods.pul_based import PULBased, PUL_METHODS
 from src.methods.mpe_based import MPEBased, MPE_METHODS
+from src.methods.baselines import Baseline, BASELINES
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -25,37 +26,52 @@ def main(cfg: DictConfig):
     for run in range(cfg.n_runs):
         seed = cfg.seed * 1000 + int(run)
         seed_everything(seed)
-        X_test, y_test, s_test, X_ctrl_test = prepare_data(
-            name=cfg.target,
-            seed=seed,
-            p=cfg.prob,
-            run_type=cfg.run_type,
-            ss_len=cfg.ss_len,
-            data_dir=cfg.data_dir,
-            bootstrap=cfg.bootstrap,
-        )
 
-        if cfg.method.name in MPE_METHODS:
-            estimator = MPEBased(
-                cfg.method.name, cfg.method.mpe_args, run_type=cfg.run_type, seed=seed
-            )
-        elif cfg.method.name in PUL_METHODS:
-            estimator = PULBased(
-                cfg.method.name,
-                cfg.method.pul_args,
-                cfg.method.method_args,
-                cfg.run_type,
-                seed,
-            )
+        if cfg.method.name in BASELINES:
+            # X_test, y_test, s_test, X_ctrl_test = prepare_baseline_data(
+            #     name=cfg.target,
+            #     seed=seed,
+            #     p=cfg.prob,
+            #     run_type=cfg.run_type,
+            #     ss_len=cfg.ss_len,
+            #     data_dir=cfg.data_dir
+            # )
+            # estimator = Baseline(cfg.method.name, cfg.run_type, seed)
+            # results = estiator.fit_estimate(X_test, y_test, s_test, X_ctrl_test)
+            pass
         else:
-            raise ValueError(f"Algorithm {cfg.method.name} not supported")
-        results = estimator.fit_estimate(X_test, y_test, s_test, X_ctrl_test)
+            X_test, y_test, s_test, X_ctrl_test = prepare_data(
+                name=cfg.target,
+                seed=seed,
+                p=cfg.prob,
+                run_type=cfg.run_type,
+                ss_len=cfg.ss_len,
+                data_dir=cfg.data_dir,
+                num_real_negatives=cfg.num_real_negatives,
+                bootstrap=cfg.bootstrap,
+            )
+            if cfg.method.name in MPE_METHODS:
+                estimator = MPEBased(
+                    cfg.method.name, cfg.method.mpe_args, run_type=cfg.run_type, seed=seed
+                )
+            elif cfg.method.name in PUL_METHODS:
+                estimator = PULBased(
+                    cfg.method.name,
+                    cfg.method.pul_args,
+                    cfg.method.method_args,
+                    cfg.run_type,
+                    seed,
+                )
+            else:
+                raise ValueError(f"Method {cfg.method.name} not supported")
+
+            results = estimator.fit_estimate(X_test, y_test, s_test, X_ctrl_test)
         print(f"Run {run + 1}/{cfg.n_runs}: p_hat={results['p_hat_test']:.3f}")
         records.append(results)
 
     metrics = [
         "p_hat_test",
-    ]
+    ] 
     if cfg.run_type == "correction":
         metrics += ["p_hat_ctrl", "p_hat_comb", "p_hat_2MIA-comb", "p_hat_MIA-ctrl"]
 

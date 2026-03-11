@@ -6,4 +6,4 @@ pul_args:
 
 method_args:
   bins: 5
-  min_bin_count_N: 5
+  min_bin_count_N: 1

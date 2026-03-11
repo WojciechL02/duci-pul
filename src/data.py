@@ -45,7 +45,7 @@ def permute_datasets(permutation, datasets):
 
 
 def prepare_data(
-    name, seed, p, ss_len=2000, run_type="real", data_dir="data", bootstrap=False
+    name, seed, p, ss_len=2000, run_type="real", data_dir="data", num_real_negatives=0, bootstrap=False
 ):
     """
     Prepare data for the experiment.
@@ -64,6 +64,8 @@ def prepare_data(
         Type of the experiment: "real", "ae_synth", "correction".
     data_dir: str
         Data source directory.
+    num_real_negatives: int
+        How many known negatives to use. If 0 then synthetic will be used. Works only in ''real'' run type.
     bootstrap : bool
         Whether to sample data with replacement (each run should have different seed then).
 
@@ -113,6 +115,8 @@ def prepare_data(
                 X_nonmem_generated[int(ss_len / 2) : ss_len],
             ]
         )
+        if num_real_negatives > 0 and num_real_negatives < X_test_nonmem.shape[0]:
+            X_test_nonmem = X_test_nonmem[np.random.randint(0, X_test_nonmem.shape[0], num_real_negatives)]
     else:
         X_test_nonmem = np.concatenate(
             [
@@ -131,7 +135,7 @@ def prepare_data(
 
     y_test = np.concatenate(
         [
-            np.ones(ss_len, dtype=int),  # N-labeled
+            np.ones(X_test_nonmem.shape[0], dtype=int),  # N-labeled
             np.zeros(n_pos_test, dtype=int),  # U-members
             np.ones(n_unl_test_nonmem, dtype=int),  # U-non-members
         ]
@@ -139,7 +143,7 @@ def prepare_data(
 
     s_test = np.concatenate(
         [
-            np.ones(ss_len, dtype=int),  # N-labeled
+            np.ones(X_test_nonmem.shape[0], dtype=int),  # N-labeled
             np.zeros(n_pos_test, dtype=int),  # U-members
             np.zeros(n_unl_test_nonmem, dtype=int),  # U-non-members
         ]
