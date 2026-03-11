@@ -10,5 +10,6 @@ ss_len: 2000
 n_runs: 5
 data_dir: "./data/standard"
 results_dir: "./results"
+num_real_negatives: 0
 bootstrap: false
 seed: 42
