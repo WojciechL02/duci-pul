@@ -24,16 +24,17 @@ plt.rcParams.update(
 )
 
 colors = {
-    "real": "blue",
-    "ae_synth": "red",
+    "real": "gray",
+    "ae_synth": "blue",
     "synth": "green",
-    "correction": "gray",
+    "correction": "red",
 }
 
 labels = {
     "real": "Real",
-    "ae_synth": "Synthetic (no correction)",
-    "correction": "Synthetic (+correction) (ours)",
+    "synth": "Synthetic",
+    "ae_synth": "Synthetic + AE",
+    "correction": "Synthetic + AE + Corr.",
 }
 
 
@@ -83,6 +84,8 @@ parser.add_argument(
         "var_20",
         "var_24",
         "var_30",
+        "dit_rf",
+        "uvit_t2i_deep",
     ],
     help="Filter results by model names (e.g., rar_xl rar_xxl var_24 var_30)",
 )
@@ -165,7 +168,7 @@ def create_individual_model_plots(
             df = pd.read_csv(file_path, delimiter="\t")
 
             try:
-                if _run_type_ != "correction" and _run_type_ != "synth":
+                if _run_type_ != "correction": # and _run_type_ != "synth":
                     if "p_hat_test" in df.columns:
                         mean = df["p_hat_test"].mean()
                         std = df["p_hat_test"].std()
@@ -182,31 +185,31 @@ def create_individual_model_plots(
 
         # plot
         for run_type_, d in metric_data.items():
-            if run_type_ != "synth":
-                if len(d["p"]) == 0:
-                    continue
+            # if run_type_ != "synth":
+            if len(d["p"]) == 0:
+                continue
 
-                p = np.array(d["p"])
-                m = np.array(d["m"])
-                s = np.array(d["s"])
-                order = np.argsort(p)
+            p = np.array(d["p"])
+            m = np.array(d["m"])
+            s = np.array(d["s"])
+            order = np.argsort(p)
 
-                ax.plot(
+            ax.plot(
+                p[order],
+                m[order],
+                marker="o",
+                label=labels[run_type_],
+                color=colors.get(run_type_, "gray"),
+            )
+
+            if show_std:
+                ax.fill_between(
                     p[order],
-                    m[order],
-                    marker="o",
-                    label=labels[run_type_],
+                    m[order] - s[order],
+                    m[order] + s[order],
                     color=colors.get(run_type_, "gray"),
+                    alpha=0.2,
                 )
-
-                if show_std:
-                    ax.fill_between(
-                        p[order],
-                        m[order] - s[order],
-                        m[order] + s[order],
-                        color=colors.get(run_type_, "gray"),
-                        alpha=0.2,
-                    )
 
         # diagonal
         ax.plot([0, 1], [0, 1], "k--")
@@ -231,19 +234,17 @@ def create_individual_model_plots(
             filter_suffix = f"_{filter_suffix}"
 
         suffix = f"_{output_suffix}" if output_suffix else ""
+        out_dir = os.path.join(results_dir, "single", target)
+        os.makedirs(out_dir, exist_ok=True)
+
         out_png = os.path.join(
-            results_dir,
-            "single",
-            target,
-            f"single_{model_key}{filter_suffix}{suffix}.png",
+            out_dir,
+            f"single_{model_key}{filter_suffix[:10]}{suffix}.png",
         )
         out_pdf = os.path.join(
-            results_dir,
-            "single",
-            target,
-            f"single_{model_key}{filter_suffix}{suffix}.pdf",
+            out_dir,
+            f"single_{model_key}{filter_suffix[:10]}{suffix}.pdf",
         )
-        os.makedirs(os.path.dirname(out_png), exist_ok=True)
 
         plt.savefig(out_png, dpi=300, bbox_inches="tight")
         plt.savefig(out_pdf, bbox_inches="tight")
@@ -312,7 +313,7 @@ def create_grid_plot(
             df = pd.read_csv(file_path, delimiter="\t")
 
             try:
-                if _run_type_ != "correction" and _run_type_ != "synth":
+                if _run_type_ != "correction": # and _run_type_ != "synth":
                     if "p_hat_test" in df.columns:
                         mean = df["p_hat_test"].mean()
                         std = df["p_hat_test"].std()
@@ -330,31 +331,31 @@ def create_grid_plot(
 
         # Plot each run type
         for run_type_, d in metric_data.items():
-            if run_type_ != "synth":
-                if len(d["p"]) == 0:
-                    continue
+            # if run_type_ != "synth":
+            if len(d["p"]) == 0:
+                continue
 
-                used_run_types.add(run_type_)
-                p = np.array(d["p"])
-                m = np.array(d["m"])
-                s = np.array(d["s"])
-                order = np.argsort(p)
+            used_run_types.add(run_type_)
+            p = np.array(d["p"])
+            m = np.array(d["m"])
+            s = np.array(d["s"])
+            order = np.argsort(p)
 
-                ax.plot(
+            ax.plot(
+                p[order],
+                m[order],
+                marker="o",
+                color=colors.get(run_type_, "gray"),
+            )
+
+            if show_std:
+                ax.fill_between(
                     p[order],
-                    m[order],
-                    marker="o",
+                    m[order] - s[order],
+                    m[order] + s[order],
                     color=colors.get(run_type_, "gray"),
+                    alpha=0.2,
                 )
-
-                if show_std:
-                    ax.fill_between(
-                        p[order],
-                        m[order] - s[order],
-                        m[order] + s[order],
-                        color=colors.get(run_type_, "gray"),
-                        alpha=0.2,
-                    )
 
         # Plot diagonal line
         ax.plot([0, 1], [0, 1], "k--")
@@ -391,7 +392,7 @@ def create_grid_plot(
     # Create a common legend
     handles = []
     labels_list = []
-    for run_type_ in ["real", "ae_synth", "correction"]:
+    for run_type_ in ["real", "synth", "ae_synth", "correction"]:
         if run_type_ in used_run_types:
             handle = plt.Line2D(
                 [],
