@@ -41,18 +41,27 @@ METHODS_MAPPING = {
     "dedpul": r"DEDPUL~\citep{ivanov2020dedpul}",
     "sumpe": r"SuMPE~\citep{zhu2023sumpe}",
     "alphamax": r"AlphaMax~\citep{jain2016alphamax}",
-    "lbe": "PUL-LBE",
-    "threshold": "PUL-NTC-$\\tau$MI",
+    "lbe": "PUL (LBE~\citep{gong2021lbe})",
+    "threshold": "PUL (NTC-$\tau$MI~\citep{teser2025threshold})",
 }
 
 RAW_METHODS_ORDER = ["km", "tice", "dedpul", "sumpe", "alphamax", "pul"]
 
 MODEL_DISPLAY = {
-        "mar_b": "MAR-B", "mar_l": "MAR-L", "mar_h": "MAR-H",
-        "rar_l": "RAR-L", "rar_xl": "RAR-XL", "rar_xxl": "RAR-XXL",
-        "var_20": "VAR-20", "var_24": "VAR-24", "var_30": "VAR-30", "var_36": "VAR-36",
-        "dit_rf": "DiT", "uvit_t2i_deep": "UViT",
-    }
+    "mar_b": "MAR-B",
+    "mar_l": "MAR-L",
+    "mar_h": "MAR-H",
+    "rar_l": "RAR-L",
+    "rar_xl": "RAR-XL",
+    "rar_xxl": "RAR-XXL",
+    "var_20": "VAR-20",
+    "var_24": "VAR-24",
+    "var_30": "VAR-30",
+    "var_36": "VAR-36",
+    "dit_rf": "DiT-RF-XL",
+    "dit_rf_g": "DiT-RF-G",
+    "uvit_t2i_deep": "UViT",
+}
 
 
 parser = argparse.ArgumentParser(
@@ -183,13 +192,14 @@ def load_records(
         raise FileNotFoundError(f"Directory {results_dir} does not exist.")
 
     all_files = [
-        f for f in os.listdir(results_dir)
-        if f.endswith(".csv") and "full" not in f
+        f for f in os.listdir(results_dir) if f.endswith(".csv") and "full" not in f
     ]
     if not all_files:
         raise ValueError(f"No CSV files found in {results_dir}.")
 
-    matched_files = filter_files(all_files, ss_len=ss_len, run_type=run_type, models=models)
+    matched_files = filter_files(
+        all_files, ss_len=ss_len, run_type=run_type, models=models
+    )
     if not matched_files:
         raise ValueError(f"No files match the specified criteria in {results_dir}.")
 
@@ -198,7 +208,11 @@ def load_records(
     for filename in matched_files:
         meta = parse_filename(filename)
         model = meta["target"]
-        method_key = f"{meta['method']}_{meta['method_args']}" if meta["method_args"] else meta["method"]
+        method_key = (
+            f"{meta['method']}_{meta['method_args']}"
+            if meta["method_args"]
+            else meta["method"]
+        )
 
         df = pd.read_csv(os.path.join(results_dir, filename), sep="\t")
         df["method"] = method_key
@@ -207,8 +221,7 @@ def load_records(
 
     return {
         model: {
-            method: pd.concat(dfs, ignore_index=True)
-            for method, dfs in methods.items()
+            method: pd.concat(dfs, ignore_index=True) for method, dfs in methods.items()
         }
         for model, methods in records.items()
     }
@@ -237,7 +250,9 @@ def create_paper_table(
         return (len(RAW_METHODS_ORDER), m)
 
     ordered_methods = sorted(all_methods, key=method_sort_key)
-    ordered_models = [m for m in models if m in records] if models else sorted(records.keys())
+    ordered_models = (
+        [m for m in models if m in records] if models else sorted(records.keys())
+    )
 
     def compute_mae_metrics(df):
         """Compute mean MAE, std MAE, and max MAE across p values."""
@@ -273,8 +288,7 @@ def create_paper_table(
 
     # Top header row: model names spanning 2 columns each
     model_headers = " & ".join(
-        r"\multicolumn{2}{c}{" + MODEL_DISPLAY.get(m, m) + "}"
-        for m in ordered_models
+        r"\multicolumn{2}{c}{" + MODEL_DISPLAY.get(m, m) + "}" for m in ordered_models
     )
     lines.append(r"\textbf{Method} & " + model_headers + r" \\")
 
@@ -297,7 +311,9 @@ def create_paper_table(
         method_label = METHODS_MAPPING.get(base_method, method)
         row_cells = [method_label]
         for model in ordered_models:
-            mean_mae, std_mae, max_mae = table_data[method].get(model, (None, None, None))
+            mean_mae, std_mae, max_mae = table_data[method].get(
+                model, (None, None, None)
+            )
             if mean_mae is None:
                 row_cells.extend(["--", "--"])
             else:

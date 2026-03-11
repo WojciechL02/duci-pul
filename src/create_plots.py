@@ -85,6 +85,7 @@ parser.add_argument(
         "var_24",
         "var_30",
         "dit_rf",
+        "dit_rf_g",
         "uvit_t2i_deep",
     ],
     help="Filter results by model names (e.g., rar_xl rar_xxl var_24 var_30)",
@@ -168,7 +169,7 @@ def create_individual_model_plots(
             df = pd.read_csv(file_path, delimiter="\t")
 
             try:
-                if _run_type_ != "correction": # and _run_type_ != "synth":
+                if _run_type_ != "correction":  # and _run_type_ != "synth":
                     if "p_hat_test" in df.columns:
                         mean = df["p_hat_test"].mean()
                         std = df["p_hat_test"].std()
@@ -313,7 +314,7 @@ def create_grid_plot(
             df = pd.read_csv(file_path, delimiter="\t")
 
             try:
-                if _run_type_ != "correction": # and _run_type_ != "synth":
+                if _run_type_ != "correction":  # and _run_type_ != "synth":
                     if "p_hat_test" in df.columns:
                         mean = df["p_hat_test"].mean()
                         std = df["p_hat_test"].std()
