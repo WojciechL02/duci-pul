@@ -2,6 +2,8 @@
 
 ## Environment Setup
 
+> **Need exact reproducibility?** The environment that was verified to work end-to-end (Blackwell GPUs, flash-attn, DiT-RF) is frozen under `cdi/env_snapshot/`. Run `bash cdi/env_snapshot/reconstruct.sh` from the repo root to get a byte-for-byte matching `.venv`. See `cdi/env_snapshot/README.md` for details and migration notes.
+
 ### 1. Create Virtual Environment
 
 ```bash
@@ -44,15 +46,33 @@ git clone --depth 1 https://github.com/CompVis/latent-diffusion.git latent-diffu
 
 ## Downloading Models
 
-### DiT-MoE Model (DiT_RF)
+### DiT-MoE (DiT-RF)
+
+Two DiT-MoE variants are registered as `dit_rf` (DiT-MoE-XL/2) and `dit_rf_g` (DiT-MoE-G/2). Both run as rectified-flow models. The wrapper (`src/models/DiT_RFWrapper.py`) auto-downloads the checkpoint on first use if it is missing on disk (destination `model_checkpoints/dit_rf/`, URL comes from the corresponding model config in `conf/model/`).
+
+| alias      | arch       | params  | checkpoint file         |
+|------------|------------|---------|-------------------------|
+| `dit_rf`   | `DiT-XL/2` | ≈ 4.2 B | `dit_moe_xl_8E2A.pt`    |
+| `dit_rf_g` | `DiT-G/2`  | ≈ 16.5 B| `dit_moe_g_16E2A.pt`    |
+
+Both checkpoints use the flash-attention MHA layout (`Wqkv`, `out_proj`, `q_norm`, `k_norm`). A working `flash_attn` install is **mandatory** — the wrapper and the underlying `DiT_MoE/models.py` block construct if the library is missing or `use_flash_attn=false`. On Blackwell (RTX 50 / sm_120) the community prebuilt wheel works out of the box:
+
+```bash
+.venv/bin/python3 -m pip install \
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.12/flash_attn-2.8.3+cu128torch2.10-cp312-cp312-linux_x86_64.whl"
+```
+
+If you want to seed the checkpoint directory manually instead of relying on auto-download:
 
 ```bash
 mkdir -p model_checkpoints/dit_rf
 wget -O model_checkpoints/dit_rf/dit_moe_xl_8E2A.pt \
     "https://huggingface.co/feizhengcong/DiT-MoE/resolve/main/dit_moe_xl_8E2A.pt?download=true"
+wget -O model_checkpoints/dit_rf/dit_moe_g_16E2A.pt \
+    "https://huggingface.co/feizhengcong/DiT-MoE/resolve/main/dit_moe_g_16E2A.pt?download=true"
 ```
 
-The VAE model (`stabilityai/sd-vae-ft-mse`) is automatically downloaded from HuggingFace on first run.
+The VAE (`stabilityai/sd-vae-ft-mse`) is automatically downloaded from HuggingFace on first run.
 
 ### UViT Models (for COCO text-to-image)
 
@@ -214,7 +234,24 @@ python main.py +action=$action +attack=$attack +model=$model +dataset=$dataset
 ### Example: Feature Extraction with DiT-RF on ImageNet
 
 ```bash
+# XL variant (default)
 python main.py +model=dit_rf +action=features_extraction +attack=gradient_masking +dataset=imagenet
+
+# G variant (smaller batch recommended)
+python main.py +model=dit_rf_g +action=features_extraction +attack=gradient_masking +dataset=imagenet model.batch_size=4
+```
+
+### Full Pipeline: All Models × All Datasets
+
+`bash_scripts/run_synthetic_cdi.sh` orchestrates the complete 4-phase pipeline (GPU features → carlini scores → combination features → combination scores) across every `(MODEL, DATASET, SPLIT)` combination, parallelising GPU work via a lock-based queue. Defaults cover `dit_rf` + `dit_rf_g` over `imagenet_5pc` (real), `tp_var_last4`, `fp_var_last4`. Override via env vars — e.g.:
+
+```bash
+MODELS="dit_rf dit_rf_g" \
+DATASETS="imagenet_5pc tp_var_last4 fp_var_last4" \
+GPUS="0 1 2" \
+IMAGENET_PATH=/data/imagenet_1k \
+OUT_ROOT=out_combi \
+bash bash_scripts/run_synthetic_cdi.sh
 ```
 
 ### Example: Feature Extraction with UViT on COCO
@@ -233,7 +270,8 @@ python main.py +model=uvit_t2i_deep +action=features_extraction +attack=gradient
 ### Available Options
 
 **Models:**
-- `dit_rf` - DiT-MoE model for ImageNet
+- `dit_rf` - DiT-MoE-XL/2 (RF) for ImageNet
+- `dit_rf_g` - DiT-MoE-G/2 (RF) for ImageNet (≈ 16.5 B params, needs ≈ 30 GB VRAM at bs=4)
 - `uvit_t2i` - UViT-S/2 for COCO text-to-image
 - `uvit_t2i_deep` - UViT-S/2 Deep for COCO text-to-image
 

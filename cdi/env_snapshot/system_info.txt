@@ -1,0 +1,111 @@
+===== OS / KERNEL =====
+Linux h33 6.8.0-101-generic #101-Ubuntu SMP PREEMPT_DYNAMIC Mon Feb  9 10:15:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+PRETTY_NAME="Ubuntu 24.04.3 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.3 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+
+===== CPU =====
+Architecture:                            x86_64
+CPU(s):                                  64
+On-line CPU(s) list:                     0-63
+Vendor ID:                               GenuineIntel
+Model name:                              INTEL(R) XEON(R) GOLD 6526Y
+Thread(s) per core:                      2
+Socket(s):                               2
+CPU(s) scaling MHz:                      22%
+NUMA node0 CPU(s):                       0-15,32-47
+NUMA node1 CPU(s):                       16-31,48-63
+
+===== MEMORY =====
+               total        used        free      shared  buff/cache   available
+Mem:           503Gi        11Gi       198Gi        11Mi       297Gi       491Gi
+
+===== DISK =====
+Filesystem                         Size  Used Avail Use% Mounted on
+/dev/mapper/ubuntu--vg-ubuntu--lv  1.8T  1.6T   31G  99% /
+/dev/mapper/data--vg-data--lv       13T  793G   12T   7% /data
+
+===== GPU (nvidia-smi) =====
+name, driver_version, memory.total [MiB], compute_cap
+NVIDIA RTX PRO 5000 Blackwell, 580.105.08, 48935 MiB, 12.0
+NVIDIA RTX PRO 5000 Blackwell, 580.105.08, 48935 MiB, 12.0
+NVIDIA RTX PRO 5000 Blackwell, 580.105.08, 48935 MiB, 12.0
+
+===== nvcc (CUDA toolkit, optional) =====
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Wed_Aug_20_01:58:59_PM_PDT_2025
+Cuda compilation tools, release 13.0, V13.0.88
+
+===== PYTHON =====
+Python 3.12.3
+executable: /home/jdubinsk/dataset_inference_dm/duci-pul/.venv/bin/python3
+platform: Linux-6.8.0-101-generic-x86_64-with-glibc2.39
+glibc: ('glibc', '2.39')
+
+===== TORCH / CUDA =====
+torch.__version__       = 2.10.0+cu128
+torch.version.cuda      = 12.8
+torch.version.git       = 449b1768410104d3ed79d3bcfe4ba1d65c7f22c0
+torch.backends.cudnn    = 91002
+torch.cuda.is_available = True
+torch.cuda.device_count = 3
+  gpu0: NVIDIA RTX PRO 5000 Blackwell  sm=12.0  mem=50.8GB
+  gpu1: NVIDIA RTX PRO 5000 Blackwell  sm=12.0  mem=50.8GB
+  gpu2: NVIDIA RTX PRO 5000 Blackwell  sm=12.0  mem=50.8GB
+flash_attn.__version__  = 2.8.3
+diffusers = 0.36.0
+transformers = 4.57.6
+numpy = 2.3.5
+scipy = 1.17.0
+omegaconf = 2.3.0
+
+===== FLASH-ATTN WHEEL =====
+install path: /home/jdubinsk/dataset_inference_dm/duci-pul/.venv/lib/python3.12/site-packages/flash_attn
+contents:
+   __init__.py
+   __pycache__
+   bert_padding.py
+   cute
+   flash_attn_interface.py
+   flash_attn_triton.py
+   flash_attn_triton_amd
+   flash_attn_triton_og.py
+   flash_blocksparse_attention.py
+   flash_blocksparse_attn_interface.py
+   layers
+   losses
+   models
+   modules
+   ops
+   utils
+Name: flash_attn
+Version: 2.8.3+cu128torch2.10
+Summary: Flash Attention: Fast and Memory-Efficient Exact Attention
+Home-page: https://github.com/Dao-AILab/flash-attention
+Author: Tri Dao
+Author-email: tri@tridao.me
+License: 
+Location: /home/jdubinsk/dataset_inference_dm/duci-pul/.venv/lib/python3.12/site-packages
+Requires: einops, torch
+Required-by: 
+
+===== REPO GIT STATE =====
+branch: full-pipeline
+head:   4e2e70d62f5c76ce4687e22b9380b0712796ffac
+remote: https://github.com/WojciechL02/duci-pul.git
+status:
+ M README.md
+ M cdi/README.md
+?? cdi/env_snapshot/
+
+===== VENV LAYOUT =====
+venv root: /home/jdubinsk/dataset_inference_dm/duci-pul/.venv
+home = /usr/bin
+include-system-site-packages = false
+version = 3.12.3
+executable = /usr/bin/python3.12
+command = /usr/bin/python3 -m venv /home/jdubinsk/dataset_inference_dm/.venv

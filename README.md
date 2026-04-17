@@ -42,6 +42,8 @@ duci-pul/
 
 ## Environment Setup
 
+> **Exact reproducibility:** `cdi/env_snapshot/` contains a full snapshot of the working environment (Python / PyTorch / flash-attn / every pip package, plus OS / GPU / driver metadata). Run `bash cdi/env_snapshot/reconstruct.sh` to recreate it automatically, or read `cdi/env_snapshot/README.md` for the manual steps and migration notes.
+
 ### 1. Create Virtual Environment
 
 ```bash
@@ -228,7 +230,22 @@ The CDI pipeline uses [Hydra](https://hydra.cc/) for configuration. All commands
 
 ### Downloading CDI Model Checkpoints
 
-**DiT-RF (DiT-MoE):**
+**DiT-RF (DiT-MoE):** the wrapper automatically downloads the checkpoint on first run if it isn't present on disk (URL and expected filename come from the model config under `cdi/conf/model/`). Two variants are supported:
+
+| model alias | arch | checkpoint |
+|---|---|---|
+| `dit_rf`   | `DiT-XL/2` (≈ 4.2 B params)  | `dit_moe_xl_8E2A.pt` |
+| `dit_rf_g` | `DiT-G/2`  (≈ 16.5 B params) | `dit_moe_g_16E2A.pt` |
+
+Both checkpoints ship with the flash-attention MHA layout (`Wqkv`, `out_proj`, `q_norm`, `k_norm`) and are loaded directly by `cdi/src/models/DiT_RFWrapper.py`. A working `flash_attn` build is **required** — the wrapper refuses to run without it. For the RTX 50 Blackwell setup the community prebuilt wheel works:
+
+```bash
+.venv/bin/python3 -m pip install \
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.12/flash_attn-2.8.3+cu128torch2.10-cp312-cp312-linux_x86_64.whl"
+```
+
+If you want to pre-download the XL checkpoint manually:
+
 ```bash
 mkdir -p cdi/model_checkpoints/dit_rf
 wget -O cdi/model_checkpoints/dit_rf/dit_moe_xl_8E2A.pt \
@@ -288,21 +305,34 @@ python main.py +model=dit_rf +action=scores_computation +attack=combination_atta
 
 ### Batch Pipeline
 
-To run the full pipeline across all synthetic datasets:
+To run the full pipeline end-to-end across all models and all datasets (real, TP, FP):
 
 ```bash
 bash cdi/bash_scripts/run_synthetic_cdi.sh
 ```
 
-This script runs four phases:
-1. **GPU Feature Extraction** -- 4 attacks x 16 datasets x 2 splits = 128 jobs, distributed across available GPUs using a lock-based queue.
-2. **Carlini Scores (CPU)** -- computes carlini_lt scores for all datasets/splits.
-3. **Combination Features (CPU)** -- assembles combination attack features.
-4. **Combination Scores (CPU)** -- computes final combination attack scores.
+Defaults run **both DiT-RF variants** (`dit_rf`, `dit_rf_g`) over three datasets (`imagenet_5pc`, `tp_var_last4`, `fp_var_last4`) and execute four phases per model:
+
+1. **GPU Feature Extraction** -- `carlini_lt`, `gradient_masking`, `multiple_loss`, `clid` × all datasets × both splits, parallelised over available GPUs with a lock-based queue.
+2. **Carlini Scores (CPU)** -- computes `carlini_lt` scores for all datasets/splits.
+3. **Combination Features (CPU)** -- assembles `combination_attack` features.
+4. **Combination Scores (CPU)** -- computes final `combination_attack` scores.
+
+All inputs are configurable via env vars, e.g. to run only the G variant on real ImageNet with a 2-GPU queue:
+
+```bash
+MODELS="dit_rf_g" \
+DATASETS="imagenet_5pc" \
+GPUS="0 1" \
+IMAGENET_PATH=/data/imagenet_1k \
+bash cdi/bash_scripts/run_synthetic_cdi.sh
+```
+
+Supported env vars: `MODELS`, `DATASETS`, `SPLITS`, `GPU_ATTACKS`, `GPUS`, `OUT_ROOT`, `IMAGENET_PATH`, `PYTHON_BIN`. Per-job logs land in `cdi/logs/`; outputs in `$OUT_ROOT/{features,scores}` (default `cdi/out/`).
 
 ### Available Options
 
-**Models:** `dit_rf`, `uvit_t2i`, `uvit_t2i_deep`
+**Models:** `dit_rf` (DiT-MoE XL/2, RF), `dit_rf_g` (DiT-MoE G/2, RF), `uvit_t2i`, `uvit_t2i_deep`
 
 **Actions:** `features_extraction`, `scores_computation`, `evaluation`, `evaluation_bulk`
 
