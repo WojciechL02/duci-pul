@@ -134,13 +134,13 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Environments (match at any depth)
 .env
 .envrc
-.venv
-env/
-venv/
-ENV/
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
 env.bak/
 venv.bak/
 
@@ -205,3 +205,47 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Model checkpoints and weights
+*.pth
+*.pth.tar
+*.ckpt
+*.safetensors
+
+# Large data directories
+synthetic/weights/
+synthetic/datasets*/
+cdi/model_checkpoints/
+cdi/out/
+cdi/data/
+cdi/outputs/
+cdi/logs/
+cdi/analysis/
+cdi/out*
+
+# Wandb / experiment tracking
+**/wandb/
+
+# Dataset / artifact files
+*.npz
+*.pdf
+
+# Local secrets / env files (never commit)
+.secret
+.secrets
+secrets.env
+
+# Per-run logs folders
+cdi/logs*/
+
+# Ad-hoc / one-off run scripts (canonical runner lives in cdi/bash_scripts/)
+cdi/run_*.sh
+cdi/bash_scripts/run_variant_last4.sh
+
+# Upload staging
+full-pipeline/
+
+# Misc heavy artifacts
+*.tar.gz
+*.zip
+*.bin

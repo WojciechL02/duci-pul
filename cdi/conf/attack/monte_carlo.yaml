@@ -1,0 +1,7 @@
+name: monte_carlo
+members_lower: false
+
+n_per_image: 10
+n_samples_pca: 1000
+pca_dim: 40
+gen_batch_size: 16

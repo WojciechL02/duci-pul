@@ -1,0 +1,5 @@
+name: imagenet-s
+dataset_path: ../data/imagenet-s
+hf_path: ek826/imagenet-gen-sd1.5
+label_name: __key__
+image_name: jpg

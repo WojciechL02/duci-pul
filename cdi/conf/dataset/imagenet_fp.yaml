@@ -1,0 +1,4 @@
+name: imagenet_fp
+dataset_path: ../data/imagenet_fp_s0.5
+test_name: val
+train_name: train
