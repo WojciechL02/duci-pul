@@ -230,6 +230,11 @@ cdi/out*
 *.npz
 *.pdf
 
+# Local secrets / env files (never commit)
+.secret
+.secrets
+secrets.env
+
 # Per-run logs folders
 cdi/logs*/
 
