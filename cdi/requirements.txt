@@ -30,6 +30,7 @@ transformers>=4.30.0
 huggingface-hub>=0.16.0
 safetensors>=0.3.0
 datasets>=2.14.0
+openai
 
 # Text processing (for CLIP)
 ftfy>=6.1.0

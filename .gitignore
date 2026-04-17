@@ -228,6 +228,14 @@ cdi/out*
 
 # Dataset / artifact files
 *.npz
+*.pdf
+
+# Per-run logs folders
+cdi/logs*/
+
+# Ad-hoc / one-off run scripts (canonical runner lives in cdi/bash_scripts/)
+cdi/run_*.sh
+cdi/bash_scripts/run_variant_last4.sh
 
 # Upload staging
 full-pipeline/

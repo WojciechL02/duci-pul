@@ -3,8 +3,11 @@ from torch import Tensor as T
 from src.models import DiffusionModel
 
 import libs.autoencoder
+import libs.clip
 from libs.uvit_t2i import UViT as UViT_t2i
 import numpy as np
+from dpm_solver_pp import NoiseScheduleVP, DPM_Solver
+from typing import Optional, Sequence
 
 
 def stable_diffusion_beta_schedule(
@@ -127,8 +130,10 @@ class UViT_t2i_Wrapper(DiffusionModel):
         self.autoencoder.to(self.device)
         self.autoencoder.eval()
 
-        betas = stable_diffusion_beta_schedule()
-        self.schedule = Schedule(betas)
+        self._betas = stable_diffusion_beta_schedule()
+        self.schedule = Schedule(self._betas)
+        self._clip_embedder = None
+        self._empty_context = None
 
     def _encode(self, images: T) -> T:
         """
@@ -174,3 +179,118 @@ class UViT_t2i_Wrapper(DiffusionModel):
         noise_pred = self._predict_noise_from_latent(latents_noisy, classes, timestep)
         batchwise_mse = ((noise - noise_pred) ** 2).mean(dim=list(range(1, len(noise.shape))))
         return batchwise_mse.detach()
+
+    def _get_clip_embedder(self):
+        if self._clip_embedder is None:
+            self._clip_embedder = libs.clip.FrozenCLIPEmbedder(device=self.device)
+            self._clip_embedder.eval()
+            self._clip_embedder.to(self.device)
+        return self._clip_embedder
+
+    @torch.no_grad()
+    def encode_prompts(self, prompts: Sequence[str]) -> T:
+        if isinstance(prompts, str):
+            prompts = [prompts]
+        return self._get_clip_embedder().encode(list(prompts))
+
+    @torch.no_grad()
+    def get_empty_context(
+        self, batch_size: int, dtype: Optional[torch.dtype] = None
+    ) -> T:
+        if self._empty_context is None:
+            self._empty_context = self.encode_prompts([""])[0]
+        empty_context = self._empty_context.unsqueeze(0).repeat(batch_size, 1, 1)
+        if dtype is not None:
+            empty_context = empty_context.to(dtype=dtype)
+        return empty_context
+
+    @torch.no_grad()
+    def sample_from_contexts(
+        self,
+        contexts: T,
+        sample_steps: int = 50,
+        guidance_scale: float = 7.5,
+        seed: Optional[int] = None,
+        seeds: Optional[Sequence[int]] = None,
+    ) -> T:
+        contexts = contexts.to(self.device)
+        if seed is not None and seeds is not None:
+            raise ValueError("Pass either `seed` or `seeds`, not both.")
+
+        # The supplementary SD-MIA pipeline seeds each generated sample separately.
+        if seeds is not None:
+            if len(seeds) != contexts.size(0):
+                raise ValueError(
+                    f"Expected {contexts.size(0)} seeds, got {len(seeds)}."
+                )
+            z_init = torch.stack(
+                [
+                    torch.randn(
+                        4,
+                        self.latent_size,
+                        self.latent_size,
+                        device=self.device,
+                        generator=torch.Generator(device=self.device).manual_seed(
+                            int(item_seed)
+                        ),
+                    )
+                    for item_seed in seeds
+                ],
+                dim=0,
+            )
+        else:
+            generator = None
+            if seed is not None:
+                generator = torch.Generator(device=self.device)
+                generator.manual_seed(seed)
+
+            z_init = torch.randn(
+                contexts.size(0),
+                4,
+                self.latent_size,
+                self.latent_size,
+                device=self.device,
+                generator=generator,
+            )
+        noise_schedule = NoiseScheduleVP(
+            schedule="discrete",
+            betas=torch.tensor(self._betas, device=self.device).float(),
+        )
+        empty_context = self.get_empty_context(
+            contexts.size(0), dtype=contexts.dtype
+        ).to(self.device)
+
+        def model_fn(x, t_continuous):
+            t = t_continuous * self.schedule.N
+            cond = self.uvit(x, t, context=contexts)
+            if guidance_scale == 0:
+                return cond
+            uncond = self.uvit(x, t, context=empty_context)
+            return cond + guidance_scale * (cond - uncond)
+
+        dpm_solver = DPM_Solver(
+            model_fn, noise_schedule, predict_x0=True, thresholding=False
+        )
+        latents = dpm_solver.sample(
+            z_init, steps=sample_steps, eps=1.0 / self.schedule.N, T=1.0
+        )
+        images = self.decode(latents).float()
+        return (0.5 * (images + 1.0)).clamp_(0.0, 1.0)
+
+    @torch.no_grad()
+    def sample_from_prompts(
+        self,
+        prompts: Sequence[str],
+        sample_steps: int = 50,
+        guidance_scale: float = 7.5,
+        seed: Optional[int] = None,
+        seeds: Optional[Sequence[int]] = None,
+    ) -> T:
+        contexts = self.encode_prompts(prompts)
+        return self.sample_from_contexts(
+            contexts,
+            sample_steps=sample_steps,
+            guidance_scale=guidance_scale,
+            seed=seed,
+            seeds=seeds,
+        )

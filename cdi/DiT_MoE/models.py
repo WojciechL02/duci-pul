@@ -13,9 +13,12 @@ import torch
 import torch.nn as nn
 import numpy as np
 import math
-from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
+from timm.models.vision_transformer import PatchEmbed
 
 import torch.nn.functional as F
+
+FLASH_ATTN_AVAILABLE = False
+FLASH_ATTN_IMPORT_ERROR = None
 
 try:
     import flash_attn
@@ -25,8 +28,9 @@ try:
     else:
         from flash_attn.flash_attn_interface import flash_attn_unpadded_kvpacked_func
         from flash_attn.modules.mha import FlashSelfAttention
+    FLASH_ATTN_AVAILABLE = True
 except Exception as e:
-    print(f'flash_attn import failed: {e}')
+    FLASH_ATTN_IMPORT_ERROR = e
 
 
 
@@ -388,14 +392,24 @@ class DiTBlock(nn.Module):
     def __init__(
         self, hidden_size, num_heads, mlp_ratio=4,
         num_experts=8, num_experts_per_tok=2, pretraining_tp=2, 
-        use_flash_attn=False, **block_kwargs
+        use_flash_attn=True, **block_kwargs
     ):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        if use_flash_attn: 
-            self.attn = FlashSelfMHAModified(hidden_size, num_heads=num_heads, qkv_bias=True, qk_norm=True)
-        else:
-            self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, qk_norm=True, **block_kwargs)
+        if not use_flash_attn:
+            raise ValueError(
+                "CDI DiT models require flash attention and do not support disabling it."
+            )
+        if not FLASH_ATTN_AVAILABLE:
+            raise ImportError(
+                "flash_attn is required for CDI DiT models."
+            ) from FLASH_ATTN_IMPORT_ERROR
+        self.attn = FlashSelfMHAModified(
+            hidden_size,
+            num_heads=num_heads,
+            qkv_bias=True,
+            qk_norm=True,
+        )
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate="tanh")
@@ -452,9 +466,17 @@ class DiT(nn.Module):
         num_experts=8, num_experts_per_tok=2,
         pretraining_tp=2,
         learn_sigma=True,
-        use_flash_attn=False,
+        use_flash_attn=True,
     ):
         super().__init__()
+        if not use_flash_attn:
+            raise ValueError(
+                "CDI DiT models require flash attention and do not support disabling it."
+            )
+        if not FLASH_ATTN_AVAILABLE:
+            raise ImportError(
+                "flash_attn is required for CDI DiT models."
+            ) from FLASH_ATTN_IMPORT_ERROR
         self.learn_sigma = learn_sigma
         self.in_channels = in_channels
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
