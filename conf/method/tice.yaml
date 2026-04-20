@@ -1,3 +1,9 @@
 name: tice
 
-mpe_args: {}
+mpe_args:
+  max_bepp: 5
+  nb_its: 3
+  max_splits: 500
+  use_most_promising: False
+  min_t: 10
+  n_splits: 3

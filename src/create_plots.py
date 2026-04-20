@@ -85,6 +85,7 @@ parser.add_argument(
         "var_24",
         "var_30",
         "dit_rf",
+        "dit_rf_b",
         "dit_rf_g",
         "uvit_t2i_deep",
     ],

@@ -127,7 +127,10 @@ def save_results(records: list, metrics: list, results_dir: str, metadata):
 
     model_name = metadata.target
     if "mpe_args" in list(metadata.method.keys()):
-        filename = f"{metadata.method.name}_{model_name}_{metadata.run_type}_len{metadata.ss_len}_p={metadata.prob}.csv"
+        mpe_args = (
+            "_".join(f"{k}={v}" for k, v in metadata.method.mpe_args.items())
+        )
+        filename = f"{metadata.method.name}_{model_name}_{metadata.run_type}_len{metadata.ss_len}_{mpe_args}_p={metadata.prob}.csv"
     else:
         pul_args = "_"
         if len(metadata.method.pul_args) > 0:

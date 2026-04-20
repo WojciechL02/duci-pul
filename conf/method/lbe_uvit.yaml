@@ -1,7 +1,7 @@
 name: lbe
 
 pul_args:
-  pretraining_epochs: 200
+  pretraining_epochs: 250
   epochs: 300
   m_steps: 25
   pretraining_lr: 1e-2
