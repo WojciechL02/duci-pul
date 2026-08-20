@@ -84,10 +84,12 @@ parser.add_argument(
         "var_20",
         "var_24",
         "var_30",
+        "var_36",
         "dit_rf",
         "dit_rf_b",
         "dit_rf_g",
         "uvit_t2i_deep",
+        "minfm",
     ],
     help="Filter results by model names (e.g., rar_xl rar_xxl var_24 var_30)",
 )
