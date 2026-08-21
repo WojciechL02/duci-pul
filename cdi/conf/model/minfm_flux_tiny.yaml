@@ -1,0 +1,36 @@
+name: minfm_flux_tiny
+
+# Checkpoint layout (symlink cdi/model_checkpoints/minfm -> /data/minfm_ckpts)
+ckpt_root: ./model_checkpoints/minfm
+denoiser_ckpt: flat/denoiser_ema.pt     # use EMA weights (training run step_00380000)
+clip_embeddings_path: ./model_checkpoints/minfm/ilsvrc2012_clip_only.pt
+
+# Flux VAE in BFL flat format (same layout minFM's AutoEncoder expects)
+vae_ckpt: ./model_checkpoints/minfm/flux_vae_bfl/ae.safetensors
+vae_latent_channels: 16
+vae_compression_factors: [1, 8, 8]
+vae_scale_factor: 0.3611
+vae_shift_factor: 0.1159
+
+# FluxDenoiser (flux-tiny = 560.25M params, matches configs/flux_tiny_imagenet.yaml)
+d_model: 1024
+d_head: 64
+n_ds_blocks: 8
+n_ss_blocks: 16
+d_txt: 768
+d_vec: 768
+d_img: 64
+rope_axis_dim: [8, 28, 28]
+guidance_embed: false
+patch_size: [1, 2, 2]
+
+# Class conditioning
+num_classes: 1000
+null_class: 1000                        # empty-prompt CLIP embedding index
+
+# Runtime
+model_dtype: bfloat16
+vae_dtype: bfloat16
+dataloader: dit
+image_size: 256
+batch_size: 8

@@ -1,0 +1,18 @@
+name: nitrot_1p2b
+
+nitrot_dir: ./model_checkpoints/nitrot/Nitro-T-1.2B
+llama_dir:  ./model_checkpoints/nitrot/Llama-3.2-1B
+
+# Runtime resolution: Nitro-T was trained at 1024; we run at 512 to fit
+# within 48 GB GPUs and to match the resolution filter we used to split
+# members (>=512) / non-members (<512) in CC12M.
+image_size: 512
+vae_downsample: 32   # DC-AE 32x
+max_seq_length: 256
+
+model_dtype: bfloat16
+vae_dtype: bfloat16
+text_dtype: bfloat16
+
+dataloader: dit   # reuse DiT preprocessing; captions come from the ImageCaption dataset
+batch_size: 4

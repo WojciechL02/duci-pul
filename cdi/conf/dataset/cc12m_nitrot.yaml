@@ -1,0 +1,12 @@
+name: cc12m_nitrot
+dataset_path: /data/nitrot_ckpts/cc12m_split
+# "in" = CC12M images with min(H,W) >= 512, which PASS AMD's Nitro-T data-prep
+#        filter and therefore are in the training slice (members).
+# "out" = CC12M images with min(H,W) < 512, REJECTED by the filter and unseen at
+#         training time; same URL corpus (non-members).
+#
+# IMPORTANT: label strings must not be substrings of each other ("members" is a
+# substring of "nonmembers", which breaks `CombinationAttackComputer.load_both_parts`).
+split: cc12mhi
+test_name: cc12mlo
+train_name: cc12mhi

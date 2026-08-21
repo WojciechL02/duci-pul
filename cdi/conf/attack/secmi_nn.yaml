@@ -1,0 +1,10 @@
+name: secmi_nn
+t0: 0
+t: 100
+step: 10
+members_lower: false
+
+batch_size: 128
+lr: 0.001
+n_epoch: 15
+num_workers: 16

@@ -1,0 +1,10 @@
+outputs/
+out*/
+logs*/
+model_checkpoints/
+VAR/
+mar/
+rar/
+**/__pycache__/
+*.npz
+*.log
