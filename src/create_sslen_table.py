@@ -55,7 +55,7 @@ parser.add_argument(
     "--targets",
     type=str,
     nargs="+",
-    default=["rar_xl", "rar_xxl", "var_24", "var_30", "dit_rf"],
+    default=["rar_xl", "rar_xxl", "var_24", "var_30", "var_36", "dit_rf"],
 )
 
 args = parser.parse_args()

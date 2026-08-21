@@ -37,6 +37,7 @@ TARGET_LABELS = {
     "rar_xxl": "RAR-XXL",
     "var_24": "VAR-24",
     "var_30": "VAR-30",
+    "var_36": "VAR-36",
     "dit_rf": "DiT-RF-XL",
     "dit_rf_b": "DiT-RF-B",
     "dit_rf_g": "DiT-RF-G",
