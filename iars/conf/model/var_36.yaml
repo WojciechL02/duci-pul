@@ -1,0 +1,22 @@
+name: var_36
+
+V: 4096
+Cvae: 32
+ch: 160
+share_quant_resi: 4
+patch_nums: [1, 2, 3, 4, 6, 9, 13, 18, 24, 32]
+model_depth: 36
+shared_aln: true
+
+dataloader: var
+image_size: 512
+batch_size: 8
+seed: 0
+
+hflip: false
+mid_reso: 1.125
+
+top_k: 900
+top_p: 0.96
+
+cond_drop_rate: 0.0

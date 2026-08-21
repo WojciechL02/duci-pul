@@ -1,0 +1,8 @@
+name: tp_sd512vardeg_strength0.5
+dataset_path: /home/users/jdubinsk/dataset_inference_dm/duci-pul/synthetic/datasets/imagenet_tp_sd512vardeg_strength0.5_cfg7.5
+split: val
+num_classes: 1000
+train_name: train
+test_name: val
+gpus_cnt: 1
+idx: 0

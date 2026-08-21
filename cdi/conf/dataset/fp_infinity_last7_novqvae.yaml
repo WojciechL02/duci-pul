@@ -1,0 +1,5 @@
+name: fp_infinity_last7_novqvae
+dataset_path: ../synthetic/datasets_novqvae/imagenet_fp_infinity_last7_cfg3.0
+split: train
+test_name: val
+train_name: train

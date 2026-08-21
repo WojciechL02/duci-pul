@@ -1,0 +1,7 @@
+outputs/
+out*/
+logs*/
+data/
+model_checkpoints/
+**/__pycache__/
+*.npz

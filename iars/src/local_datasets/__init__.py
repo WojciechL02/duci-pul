@@ -1,0 +1,28 @@
+from src.local_datasets.dataset import ImageFolderDataset
+
+datasets = {
+    "imagenet": ImageFolderDataset,
+    "imagenet_5pc": ImageFolderDataset,
+    "fp_var_last4": ImageFolderDataset,
+    "tp_var_last4": ImageFolderDataset,
+    "fp_sd_strength0.4": ImageFolderDataset,
+    "tp_sd_strength0.4": ImageFolderDataset,
+    "fp_sd_strength0.6": ImageFolderDataset,
+    "tp_sd_strength0.6": ImageFolderDataset,
+    "fp_sd512_strength0.5": ImageFolderDataset,
+    "tp_sd512_strength0.5": ImageFolderDataset,
+    "fp_sd_strength0.5": ImageFolderDataset,
+    "tp_sd_strength0.5": ImageFolderDataset,
+    "imagenet_5pc_var512": ImageFolderDataset,
+    "fp_sd512var_strength0.5": ImageFolderDataset,
+    "tp_sd512var_strength0.5": ImageFolderDataset,
+    "fp_sd512vardeg_strength0.5": ImageFolderDataset,
+    "tp_sd512vardeg_strength0.5": ImageFolderDataset,
+    "fp_sd512vardeglp_strength0.5": ImageFolderDataset,
+    "tp_sd512vardeglp_strength0.5": ImageFolderDataset,
+    "imagenet_5pc_var512emu256": ImageFolderDataset,
+    "fp_sdrepro_strength0.5": ImageFolderDataset,
+    "tp_sdrepro_strength0.5": ImageFolderDataset,
+    "fp_sd512varemu_strength0.5": ImageFolderDataset,
+    "tp_sd512varemu_strength0.5": ImageFolderDataset,
+}

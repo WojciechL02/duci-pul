@@ -1,0 +1,18 @@
+name: deltafm_sitxl
+vae_model: stabilityai/sd-vae-ft-mse
+vae_cache: ./model_checkpoints/deltafm/vae_cache
+diffuser_model: ./model_checkpoints/deltafm/checkpoints/repa_sitxl2_deltafm_256.pt
+
+arch: SiT-XL/2
+num_classes: 1000
+null_class: 1000
+encoder_depth: 8
+projector_embed_dims: "768"
+fused_attn: true
+qk_norm: false
+
+model_dtype: float32
+vae_dtype: float16
+dataloader: dit
+image_size: 256
+batch_size: 8

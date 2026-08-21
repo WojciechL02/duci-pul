@@ -1,0 +1,6 @@
+name: fp_coco_infinity_last2
+dataset_path: ../synthetic/datasets/coco_fp_infinity_last2_cfg3.0
+split: train
+train_name: train
+test_name: val
+image_size: 256

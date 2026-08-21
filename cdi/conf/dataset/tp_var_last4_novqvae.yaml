@@ -1,0 +1,5 @@
+name: tp_var_last4_novqvae
+dataset_path: ../synthetic/datasets_novqvae/imagenet_tp_var_last4_cfg1.5
+split: train
+test_name: val
+train_name: train

@@ -1,0 +1,3 @@
+from src.attacks.scores_computation.combination_attack import CombinationAttackComputer
+
+MultipleLossComputer = CombinationAttackComputer
